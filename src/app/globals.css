@@ -48,6 +48,21 @@
     outline: none;
   }
 
+  /* Force dark background + white text on all inputs — browser defaults override Tailwind */
+  input, textarea, select {
+    background-color: var(--color-bg-surface-2);
+    color: var(--color-text-primary);
+  }
+
+  /* Override browser autofill yellow/white flash */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px var(--color-bg-surface-2) inset;
+    -webkit-text-fill-color: var(--color-text-primary);
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
   /* Scrollbar styling */
   ::-webkit-scrollbar {
     width: 6px;

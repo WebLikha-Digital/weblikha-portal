@@ -22,6 +22,8 @@ const inter = Inter({
   display:  'swap',
 })
 
+const FAVICON = 'https://cdn.prod.website-files.com/6829ba317137e68337ab4113/6841dcfbd9aafe194e4c1db1_weblikha_Favicon.png'
+
 export const metadata: Metadata = {
   title: {
     template: '%s | Weblikha Portal',
@@ -29,6 +31,10 @@ export const metadata: Metadata = {
   },
   description: 'Internal project management portal for Weblikha Digital Inc.',
   robots: 'noindex, nofollow', // Internal tool — never index
+  icons: {
+    icon:     FAVICON,
+    shortcut: FAVICON,
+  },
 }
 
 export default function RootLayout({
@@ -37,7 +43,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${bricolage.variable} ${inter.variable}`}>
+    <html lang="en" className={`${bricolage.variable} ${inter.variable}`} suppressHydrationWarning>
       <body>
         {children}
       </body>

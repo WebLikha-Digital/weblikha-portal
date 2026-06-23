@@ -55,9 +55,12 @@ export function Sidebar({ user }: SidebarProps) {
     >
       {/* Logo */}
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-subtle px-4">
-        <span className="font-display text-base font-semibold text-brand">
-          weblikha
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://cdn.prod.website-files.com/6829ba317137e68337ab4113/6829e463f9165ea007955225_Weblikha-Logo.svg"
+          alt="Weblikha"
+          className="h-5 w-auto"
+        />
         <span className="rounded-sm bg-bg-surface-3 px-1.5 py-0.5 text-2xs text-secondary">
           portal
         </span>

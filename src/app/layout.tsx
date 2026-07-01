@@ -34,6 +34,13 @@ export const metadata: Metadata = {
   icons: {
     icon:     FAVICON,
     shortcut: FAVICON,
+    apple:    '/icons/icon-192.png',
+  },
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable:    true,
+    title:      'Weblikha Portal',
+    statusBarStyle: 'black-translucent',
   },
 }
 
@@ -44,6 +51,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${bricolage.variable} ${inter.variable}`} suppressHydrationWarning>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="theme-color" content="#101010" />
+        <meta name="mobile-web-app-capable" content="yes" />
+      </head>
       <body>
         {children}
       </body>

@@ -12,22 +12,27 @@
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
-export type UserRole     = 'admin' | 'provider'
-export type Specialty    = 'developer' | 'designer' | 'seo' | 'pm' | 'other'
-export type ProjectStatus = 'discovery' | 'in_progress' | 'review' | 'completed' | 'archived'
-export type TaskStatus   = 'pending' | 'in_progress' | 'done'
-export type RevenueType  = 'income' | 'expense'
+export type UserRole       = 'admin' | 'provider' | 'client'
+export type Specialty      = 'developer' | 'designer' | 'seo' | 'pm' | 'other'
+export type ProjectStatus  = 'discovery' | 'in_progress' | 'review' | 'completed' | 'archived'
+export type TaskStatus     = 'pending' | 'in_progress' | 'done'
+export type RevenueType    = 'income' | 'expense'
+export type EmploymentType = 'in-house' | 'outsource'
 
 // ── Base entities (match DB columns 1-to-1) ───────────────────────────────────
 
 export interface User {
-  id:          string
-  email:       string
-  name:        string
-  role:        UserRole
-  specialty:   Specialty
-  avatar_url:  string | null
-  created_at:  string
+  id:              string
+  email:           string
+  name:            string
+  role:            UserRole
+  specialty:       Specialty        // legacy primary skill — prefer skills[0]
+  skills:          string[]         // ordered; first element is primary display skill
+  employment_type: EmploymentType
+  avatar_url:      string | null
+  approved:        boolean
+  created_at:      string
+  updated_at:      string
 }
 
 export interface Project {
@@ -41,6 +46,7 @@ export interface Project {
   description: string | null
   created_by:  string | null
   created_at:  string
+  updated_at:  string
 }
 
 export interface ProjectMember {
@@ -51,9 +57,18 @@ export interface ProjectMember {
   joined_at:        string
 }
 
+export interface TaskList {
+  id:         string
+  project_id: string
+  name:       string
+  position:   number
+  created_at: string
+}
+
 export interface Task {
   id:           string
   project_id:   string
+  task_list_id: string | null
   assignee_id:  string | null
   title:        string
   description:  string | null
@@ -62,6 +77,18 @@ export interface Task {
   completed_at: string | null
   points_value: number        // Default 60 (task completion points)
   created_at:   string
+  updated_at:   string
+}
+
+export interface Message {
+  id:                string
+  project_id:        string
+  author_id:         string | null
+  title:             string
+  body:              string
+  is_client_visible: boolean
+  created_at:        string
+  updated_at:        string
 }
 
 export interface PerformancePeriod {
@@ -94,6 +121,62 @@ export interface RevenueEntry {
 export interface ProjectWithMembers extends Project {
   members:         (ProjectMember & { user: User })[]
   revenue_entries: RevenueEntry[]
+}
+
+/** Task list with its tasks and assignee user data */
+export interface TaskListWithTasks extends TaskList {
+  tasks: (Task & { assignee: User | null })[]
+}
+
+/** Message with its author user data */
+export interface MessageWithAuthor extends Message {
+  author: User | null
+}
+
+/** Performance period joined with the team member's user row */
+export interface PerformancePeriodWithUser extends PerformancePeriod {
+  user: User
+}
+
+/** Full project detail — everything needed for the detail page */
+export interface ProjectDetail extends Project {
+  members:    (ProjectMember & { user: User })[]
+  task_lists: TaskListWithTasks[]
+  messages:   MessageWithAuthor[]
+}
+
+// ── Template types ────────────────────────────────────────────────────────────
+
+export interface ProjectTemplate {
+  id:          string
+  name:        string
+  description: string | null
+  created_by:  string | null
+  created_at:  string
+  updated_at:  string
+}
+
+export interface TemplateTaskList {
+  id:          string
+  template_id: string
+  name:        string
+  position:    number
+  created_at:  string
+}
+
+export interface TemplateTask {
+  id:                    string
+  template_task_list_id: string
+  title:                 string
+  description:           string | null
+  points_value:          number
+  position:              number
+  created_at:            string
+}
+
+/** Full template with nested phases and tasks */
+export interface ProjectTemplateWithLists extends ProjectTemplate {
+  task_lists: (TemplateTaskList & { tasks: TemplateTask[] })[]
 }
 
 /** User with their current-month performance data */
@@ -144,10 +227,10 @@ export interface CreateTaskPayload {
 }
 
 /** Payload for admin to update incentive points */
-export interface UpdateAdminPointsPayload {
-  user_id:      string
-  period_month: number
-  period_year:  number
-  admin_points: number
-  admin_note:   string | null
+export interface AdminPointsPayload {
+  user_id:     string
+  month:       number
+  year:        number
+  adminPoints: number
+  adminNote:   string | null
 }

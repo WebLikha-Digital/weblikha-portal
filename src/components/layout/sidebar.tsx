@@ -1,13 +1,12 @@
 /**
  * SIDEBAR COMPONENT
  * ─────────────────────────────────────────────────────────────────────────────
- * The main navigation for the portal. Fixed on the left, 200px wide.
- * Uses Next.js usePathname() to highlight the active route.
+ * Role-aware navigation. Admins see everything; providers see only their
+ * relevant pages (Dashboard, Projects, Rewards).
  *
  * TO ADD A NAV ITEM:
- *   1. Add an entry to the NAV_ITEMS array below.
+ *   1. Add an entry to ADMIN_NAV or PROVIDER_NAV below.
  *   2. Create the corresponding page at src/app/(portal)/<href>/page.tsx.
- *   That's it — the sidebar renders from the array automatically.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 'use client'
@@ -21,6 +20,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Trophy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui'
@@ -28,15 +28,21 @@ import type { User } from '@/types'
 
 // ── Navigation config ──────────────────────────────────────────────────────────
 
-const NAV_ITEMS = [
-  { label: 'Dashboard',  href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Projects',   href: '/projects',  icon: Folder },
-  { label: 'Team',       href: '/team',      icon: Users },
-  { label: 'Revenue',    href: '/revenue',   icon: BarChart3 },
+const ADMIN_NAV = [
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Projects',  href: '/projects',  icon: Folder },
+  { label: 'Team',      href: '/team',      icon: Users },
+  { label: 'Revenue',   href: '/revenue',   icon: BarChart3 },
 ] as const
 
-const BOTTOM_ITEMS = [
-  { label: 'Settings',   href: '/settings',  icon: Settings },
+const PROVIDER_NAV = [
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Projects',  href: '/projects',  icon: Folder },
+  { label: 'Rewards',   href: '/rewards',   icon: Trophy },
+] as const
+
+const ADMIN_BOTTOM = [
+  { label: 'Settings', href: '/settings', icon: Settings },
 ] as const
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -46,7 +52,10 @@ interface SidebarProps {
 }
 
 export function Sidebar({ user }: SidebarProps) {
-  const pathname = usePathname()
+  const pathname   = usePathname()
+  const isAdmin    = user.role === 'admin'
+  const navItems   = isAdmin ? ADMIN_NAV   : PROVIDER_NAV
+  const bottomItems = isAdmin ? ADMIN_BOTTOM : []
 
   return (
     <aside
@@ -54,22 +63,19 @@ export function Sidebar({ user }: SidebarProps) {
       aria-label="Main navigation"
     >
       {/* Logo */}
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-subtle px-4">
+      <div className="flex h-20 shrink-0 items-end pb-4 border-b border-subtle px-5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="https://cdn.prod.website-files.com/6829ba317137e68337ab4113/6829e463f9165ea007955225_Weblikha-Logo.svg"
           alt="Weblikha"
-          className="h-5 w-auto"
+          className="h-12 w-auto"
         />
-        <span className="rounded-sm bg-bg-surface-3 px-1.5 py-0.5 text-2xs text-secondary">
-          portal
-        </span>
       </div>
 
       {/* Primary nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Primary">
         <ul className="space-y-0.5" role="list">
-          {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+          {navItems.map(({ label, href, icon: Icon }) => {
             const isActive = pathname === href || pathname.startsWith(`${href}/`)
             return (
               <li key={href}>
@@ -94,27 +100,29 @@ export function Sidebar({ user }: SidebarProps) {
 
       {/* Bottom section */}
       <div className="border-t border-subtle px-2 py-3">
-        <ul className="space-y-0.5 mb-2" role="list">
-          {BOTTOM_ITEMS.map(({ label, href, icon: Icon }) => {
-            const isActive = pathname === href
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  className={cn(
-                    'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors duration-fast',
-                    isActive
-                      ? 'bg-warning-bg text-brand font-medium'
-                      : 'text-secondary hover:bg-bg-overlay hover:text-primary',
-                  )}
-                >
-                  <Icon className="size-4 shrink-0" aria-hidden />
-                  {label}
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
+        {bottomItems.length > 0 && (
+          <ul className="space-y-0.5 mb-2" role="list">
+            {bottomItems.map(({ label, href, icon: Icon }) => {
+              const isActive = pathname === href
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className={cn(
+                      'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors duration-fast',
+                      isActive
+                        ? 'bg-warning-bg text-brand font-medium'
+                        : 'text-secondary hover:bg-bg-overlay hover:text-primary',
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" aria-hidden />
+                    {label}
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        )}
 
         {/* User row */}
         <div className="flex items-center gap-2.5 rounded-md px-3 py-2">

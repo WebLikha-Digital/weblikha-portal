@@ -37,7 +37,7 @@ const badgeVariants = cva(
 )
 
 export interface BadgeProps
-  extends React.HTMLAttributes<'span'>,
+  extends React.HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {
   /** Convenience prop — maps a ProjectStatus to the right variant automatically */
   status?: ProjectStatus

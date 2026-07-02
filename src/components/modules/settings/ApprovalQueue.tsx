@@ -64,4 +64,14 @@ export function ApprovalQueue({ pending }: { pending: User[] }) {
             </button>
             <button
               onClick={() => handleReject(user.id)}
-              className="flex items-center gap-1 h-7 px-2 rounded-md text-tertiary hover:text-danger hover:bg-danger/10 transition
+              className="flex items-center gap-1 h-7 px-2 rounded-md text-tertiary hover:text-danger hover:bg-danger/10 transition-colors"
+              title="Reject"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}

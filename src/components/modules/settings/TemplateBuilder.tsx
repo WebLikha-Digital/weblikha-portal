@@ -540,4 +540,21 @@ export function TemplateBuilder({ templates }: { templates: ProjectTemplateWithL
                     onClick={() => { setAddingPhase(false); setNewPhaseName('') }}
                     className="h-8 px-2 text-sm text-secondary hover:text-primary transition-colors"
                   >
-               
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingPhase(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-tertiary hover:text-secondary border border-dashed border-subtle rounded-lg transition-colors"
+                >
+                  <Plus className="size-3.5" /> Add phase
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

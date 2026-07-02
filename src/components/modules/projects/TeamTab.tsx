@@ -164,4 +164,19 @@ export function TeamTab({ projectId, members, availableMembers, isAdmin }: TeamT
                         >
                           <Avatar name={u.name} src={u.avatar_url} size="sm" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium tex
+                            <p className="text-sm font-medium text-primary truncate">{u.name}</p>
+                            <p className="text-2xs text-secondary capitalize">{u.specialty}</p>
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

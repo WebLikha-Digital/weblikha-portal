@@ -52,4 +52,16 @@ export function PortalShell({ user, children }: PortalShellProps) {
           fixed header and above the bottom tab bar */}
       <main
         className={cn(
-          'flex-1 min-w-0 pt-14 pb-20 md
+          'flex-1 min-w-0 pt-14 pb-20 md:pt-0 md:pb-0 transition-[margin] duration-200',
+          collapsed ? 'md:ml-16' : 'md:ml-[200px]',
+        )}
+      >
+        {children}
+      </main>
+
+      <MobileTabBar user={user} />
+      <Toaster />
+      <ConfirmHost />
+    </div>
+  )
+}

@@ -237,4 +237,234 @@ export async function updateTask(
   const isAdmin = profile?.role === 'admin'
 
   const { data: task } = await supabase
-    .from('tasks').select('assign
+    .from('tasks').select('assignee_id').eq('id', taskId).single()
+  if (!task) throw new Error('Task not found.')
+
+  const isAssignee = task.assignee_id === user.id
+  if (!isAdmin && !isAssignee) {
+    throw new Error('Only admins or the assignee can edit this task.')
+  }
+
+  const updates: Record<string, unknown> = {}
+  if (fields.title !== undefined) {
+    const title = fields.title.trim()
+    if (!title) throw new Error('Title cannot be empty.')
+    updates.title = title
+  }
+  if (fields.description !== undefined) updates.description = fields.description
+  if (fields.due_date !== undefined)    updates.due_date    = fields.due_date
+  if (fields.assignee_id !== undefined) updates.assignee_id = fields.assignee_id
+
+  // Points affect incentive payouts — admin only
+  if (fields.points_value !== undefined) {
+    if (!isAdmin) throw new Error('Only admins can change points.')
+    updates.points_value = fields.points_value
+  }
+
+  if (Object.keys(updates).length === 0) return
+
+  const { error } = await supabase
+    .from('tasks').update(updates).eq('id', taskId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/projects/${projectId}`)
+  revalidatePath('/dashboard')
+}
+
+/** Swap a task with its neighbor in the same list (direction: -1 = up, +1 = down). */
+export async function moveTask(taskId: string, taskListId: string, projectId: string, direction: -1 | 1) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select('id, position')
+    .eq('task_list_id', taskListId)
+    .order('position', { ascending: true })
+
+  const ordered  = tasks ?? []
+  const index    = ordered.findIndex(t => t.id === taskId)
+  const current  = ordered[index]
+  const swapWith = ordered[index + direction]
+  if (!current || !swapWith) return // already at the edge
+
+  await supabase.from('tasks').update({ position: swapWith.position }).eq('id', current.id)
+  await supabase.from('tasks').update({ position: current.position }).eq('id', swapWith.id)
+  revalidatePath(`/projects/${projectId}`)
+}
+
+/**
+ * Extracts comment-attachment storage paths from rich-text bodies so the
+ * underlying images can be removed when comments/tasks are deleted.
+ */
+function extractAttachmentPaths(bodies: string[]): string[] {
+  const paths = new Set<string>()
+  for (const body of bodies) {
+    for (const match of body.matchAll(/comment-attachments\/([^"'\s)]+)/g)) {
+      if (match[1]) paths.add(decodeURIComponent(match[1]))
+    }
+  }
+  return Array.from(paths)
+}
+
+export async function deleteTask(taskId: string, projectId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') throw new Error('Admin only.')
+
+  // Collect attachment paths before comments cascade-delete
+  const { data: comments } = await supabase
+    .from('task_comments').select('body').eq('task_id', taskId)
+  const paths = extractAttachmentPaths((comments ?? []).map(c => c.body))
+
+  await supabase.from('tasks').delete().eq('id', taskId)
+
+  // Best-effort image cleanup — a failure here shouldn't block the delete
+  if (paths.length > 0) {
+    await supabase.storage.from('comment-attachments').remove(paths)
+  }
+
+  revalidatePath(`/projects/${projectId}`)
+  revalidatePath('/dashboard')
+}
+
+// ── Task comment actions ───────────────────────────────────────────────────────
+// RLS enforces the real permissions (admin or project member, author-only delete);
+// these actions stay thin and surface DB errors.
+
+export async function createTaskComment(
+  taskId: string,
+  projectId: string,
+  body: string,
+  mentions: string[] = [],
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const trimmed = body.trim()
+  if (!trimmed) throw new Error('Comment cannot be empty.')
+  if (trimmed.length > 20000) throw new Error('Comment is too long.')
+
+  const { error } = await supabase
+    .from('task_comments')
+    .insert({ task_id: taskId, author_id: user.id, body: trimmed, mentions })
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/projects/${projectId}`)
+}
+
+export async function updateTaskComment(
+  commentId: string,
+  projectId: string,
+  body: string,
+  mentions: string[] = [],
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const trimmed = body.trim()
+  if (!trimmed) throw new Error('Comment cannot be empty.')
+  if (trimmed.length > 20000) throw new Error('Comment is too long.')
+
+  // RLS: only the author (or admin) can update; others match zero rows
+  const { error } = await supabase
+    .from('task_comments')
+    .update({ body: trimmed, mentions })
+    .eq('id', commentId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/projects/${projectId}`)
+}
+
+export async function deleteTaskComment(commentId: string, projectId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  // Grab the body first so attached images can be cleaned up
+  const { data: comment } = await supabase
+    .from('task_comments').select('body').eq('id', commentId).single()
+
+  const { error } = await supabase
+    .from('task_comments').delete().eq('id', commentId)
+  if (error) throw new Error(error.message)
+
+  // Best-effort image cleanup
+  const paths = extractAttachmentPaths(comment ? [comment.body] : [])
+  if (paths.length > 0) {
+    await supabase.storage.from('comment-attachments').remove(paths)
+  }
+
+  revalidatePath(`/projects/${projectId}`)
+}
+
+// ── Template actions ───────────────────────────────────────────────────────────
+
+export async function applyTemplate(projectId: string, templateId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') throw new Error('Admin only.')
+
+  const { data: template, error: tErr } = await supabase
+    .from('project_templates')
+    .select('*, task_lists: template_task_lists(*, tasks: template_tasks(*))')
+    .eq('id', templateId)
+    .single()
+
+  if (tErr || !template) throw new Error('Template not found.')
+
+  const { count: existingCount } = await supabase
+    .from('task_lists')
+    .select('*', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+
+  let positionOffset = existingCount ?? 0
+
+  const sortedLists = [...(template.task_lists ?? [])].sort(
+    (a: { position: number }, b: { position: number }) => a.position - b.position
+  )
+
+  for (const tList of sortedLists) {
+    const { data: newList, error: lErr } = await supabase
+      .from('task_lists')
+      .insert({ project_id: projectId, name: tList.name, position: positionOffset++ })
+      .select('id')
+      .single()
+
+    if (lErr || !newList) continue
+
+    const sortedTasks = [...(tList.tasks ?? [])].sort(
+      (a: { position: number }, b: { position: number }) => a.position - b.position
+    )
+
+    if (sortedTasks.length > 0) {
+      const defaultDue = new Date()
+      defaultDue.setDate(defaultDue.getDate() + 30)
+      const dueDateStr = defaultDue.toISOString().split('T')[0]!
+
+      await supabase.from('tasks').insert(
+        sortedTasks.map((t: { title: string; points_value: number }) => ({
+          project_id:   projectId,
+          task_list_id: newList.id,
+          title:        t.title,
+          due_date:     dueDateStr,
+          points_value: t.points_value ?? 60,
+          status:       'pending',
+        }))
+      )
+    }
+  }
+
+  revalidatePath(`/projects/${projectId}`)
+}

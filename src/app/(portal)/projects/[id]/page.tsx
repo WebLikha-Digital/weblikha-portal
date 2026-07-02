@@ -114,4 +114,17 @@ export default async function ProjectDetailPage({ params }: Props) {
         </div>
       </div>
 
-      {/*
+      {/* Tabs + content — instant client-side switching */}
+      <ProjectTabsLayout
+        projectId={id}
+        currentUserId={authUser!.id}
+        taskLists={taskLists}
+        messages={messages}
+        members={members}
+        availableMembers={availableMembers}
+        templates={templates}
+        isAdmin={isAdmin}
+      />
+    </div>
+  )
+}

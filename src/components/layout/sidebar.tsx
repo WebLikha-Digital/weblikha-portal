@@ -144,4 +144,56 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
             {collapsed
               ? <PanelLeftOpen  className="size-4 shrink-0" aria-hidden />
               : <PanelLeftClose className="size-4 shrink-0" aria-hidden />}
-            
+            {!collapsed && 'Collapse'}
+          </button>
+        )}
+
+        {bottomItems.length > 0 && (
+          <ul className="space-y-0.5 mb-2" role="list">
+            {bottomItems.map(({ label, href, icon: Icon }) => {
+              const isActive = pathname === href
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className={linkClass(isActive)}
+                    title={collapsed ? label : undefined}
+                  >
+                    <Icon className="size-4 shrink-0" aria-hidden />
+                    {!collapsed && label}
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+
+        {/* User row — stacks vertically when collapsed */}
+        <div
+          className={cn(
+            'flex items-center rounded-md',
+            collapsed ? 'flex-col gap-2 px-0 py-2' : 'gap-2.5 px-3 py-2',
+          )}
+        >
+          <Avatar name={user.name} src={user.avatar_url} size="sm" />
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-primary">{user.name}</p>
+              <p className="text-2xs text-secondary capitalize">{user.role}</p>
+            </div>
+          )}
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              className="text-tertiary hover:text-danger transition-colors duration-fast"
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <LogOut className="size-3.5" aria-hidden />
+            </button>
+          </form>
+        </div>
+      </div>
+    </aside>
+  )
+}

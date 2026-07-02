@@ -79,3 +79,5 @@ export default async function SettingsPage() {
         <TemplateBuilder templates={templates} />
       </section>
     </div>
+  )
+}

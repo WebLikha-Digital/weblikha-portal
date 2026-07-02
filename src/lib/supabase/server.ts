@@ -33,4 +33,10 @@ export async function createClient() {
             )
           } catch {
             // setAll is called from Server Components where cookies are read-only.
-            // If a middleware is refreshing the sessi
+            // If a middleware is refreshing the session, this error is safe to ignore.
+          }
+        },
+      },
+    },
+  )
+}

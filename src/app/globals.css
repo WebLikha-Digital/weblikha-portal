@@ -114,3 +114,72 @@
     border-top: 1px solid var(--color-border-subtle);
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * RICH TEXT — comment editor (Tiptap) + rendered comment bodies
+ * Shared styles so composing and viewing look identical.
+ * ───────────────────────────────────────────────────────────────────────────── */
+.rich-text p {
+  margin: 0 0 var(--space-1) 0;
+}
+.rich-text p:last-child {
+  margin-bottom: 0;
+}
+.rich-text ul,
+.rich-text ol {
+  margin: 0 0 var(--space-1) 0;
+  padding-left: var(--space-5);
+}
+.rich-text ul { list-style: disc; }
+.rich-text ol { list-style: decimal; }
+.rich-text a {
+  color: var(--color-brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rich-text img {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  margin: var(--space-1) 0;
+  display: block;
+}
+.rich-text code {
+  background-color: var(--color-bg-surface-3);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  font-size: 0.9em;
+}
+.rich-text blockquote {
+  border-left: 2px solid var(--color-border-subtle);
+  padding-left: var(--space-3);
+  color: var(--color-text-secondary);
+}
+/* @mention chips */
+.rich-text .mention {
+  color: var(--color-brand);
+  background-color: color-mix(in srgb, var(--color-brand) 12%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Editor container */
+.comment-editor .ProseMirror {
+  min-height: 60px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  outline: none;
+}
+.comment-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-tertiary);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

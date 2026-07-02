@@ -62,4 +62,11 @@ export function TeamTabs({ providers, periods, projectStats, month, year }: Prop
 
       {activeTab === 'members' && (
         <MembersTab
-          providers={provider
+          providers={providers}
+          periods={periods}
+          projectStats={projectStats}
+        />
+      )}
+    </div>
+  )
+}

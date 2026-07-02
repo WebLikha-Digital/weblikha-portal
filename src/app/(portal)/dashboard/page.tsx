@@ -222,4 +222,13 @@ async function ProviderDashboard({
                   <p className="text-2xs text-secondary truncate">{t.project?.name}</p>
                 </div>
                 <span className="text-2xs text-tertiary shrink-0 whitespace-nowrap">
-                  {new Date(t
+                  {new Date(t.due_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -273,4 +273,6 @@ export function NewProjectModal({ teamMembers }: NewProjectModalProps) {
           </button>
         </div>
       </div>
-  
+    </>
+  )
+}

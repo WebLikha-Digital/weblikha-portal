@@ -226,4 +226,33 @@ export interface MonthlyRevenue {
 
 // ── UI / form types ───────────────────────────────────────────────────────────
 
-/** Payload for creating a new pro
+/** Payload for creating a new project */
+export interface CreateProjectPayload {
+  name:        string
+  client_name: string
+  status:      ProjectStatus
+  start_date:  string
+  end_date:    string
+  budget:      number
+  description: string | null
+  member_ids:  string[]
+}
+
+/** Payload for creating a task */
+export interface CreateTaskPayload {
+  project_id:  string
+  assignee_id: string
+  title:       string
+  description: string | null
+  due_date:    string
+  points_value: number
+}
+
+/** Payload for admin to update incentive points */
+export interface AdminPointsPayload {
+  user_id:     string
+  month:       number
+  year:        number
+  adminPoints: number
+  adminNote:   string | null
+}

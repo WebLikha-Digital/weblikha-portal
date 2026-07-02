@@ -92,4 +92,21 @@ const config: Config = {
       },
 
       borderRadius: {
-        sm:   'var(--radius-
+        sm:   'var(--radius-sm)',
+        md:   'var(--radius-md)',
+        lg:   'var(--radius-lg)',
+        xl:   'var(--radius-xl)',
+        full: 'var(--radius-full)',
+      },
+
+      transitionDuration: {
+        fast: '100ms',
+        base: '150ms',
+        slow: '250ms',
+      },
+    },
+  },
+  plugins: [],
+}
+
+export default config

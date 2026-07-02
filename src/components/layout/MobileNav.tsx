@@ -66,4 +66,19 @@ export function MobileNav({ user }: Props) {
       */}
       {/*
         w-[200px] is required: the Sidebar inside is position:fixed (out of flow),
-       
+        so without an explicit width this wrapper is 0px wide and
+        -translate-x-full (-100% of own width) moves it by nothing — leaving the
+        drawer permanently visible. The transform also makes this wrapper the
+        containing block for the fixed Sidebar, which is what we want.
+      */}
+      <div
+        className={cn(
+          'md:hidden fixed inset-y-0 left-0 z-[60] w-[200px] transition-transform duration-200 ease-in-out',
+          open ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
+        <Sidebar user={user} />
+      </div>
+    </>
+  )
+}

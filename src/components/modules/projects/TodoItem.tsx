@@ -371,4 +371,109 @@ export function TodoItem({
                 type="number"
                 min={0}
                 value={editPoints}
-     
+                onChange={e => setEditPoints(e.target.value)}
+                title="Points value"
+                className="w-20 h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand"
+              />
+            )}
+            <button
+              onClick={handleSaveEdit}
+              disabled={!editTitle.trim() || !editDueDate}
+              className="h-8 px-3 text-sm bg-brand text-bg-base font-medium rounded-md hover:bg-brand/90 disabled:opacity-40 transition-colors"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="h-8 px-2 text-sm text-secondary hover:text-primary transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Comment thread */}
+      {showComments && (
+        <div className="px-4 py-3 space-y-3 bg-bg-surface-2 border-t border-subtle">
+          {optimisticComments.length === 0 && (
+            <p className="text-xs text-tertiary">No comments yet. Start the discussion.</p>
+          )}
+
+          {optimisticComments.map(comment => {
+            const isTemp     = comment.id.startsWith('temp-')
+            const isAuthor   = comment.author_id === currentUserId
+            const canDelete  = !isTemp && (isAdmin || isAuthor)
+            const wasEdited  = comment.updated_at !== comment.created_at
+            const isEditing  = editingCommentId === comment.id
+
+            return (
+              <div
+                key={comment.id}
+                className={cn('group/comment flex items-start gap-2.5', isTemp && 'opacity-60')}
+              >
+                <Avatar
+                  name={comment.author?.name ?? 'Unknown'}
+                  src={comment.author?.avatar_url ?? null}
+                  size="xs"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-primary">
+                      {comment.author?.name ?? 'Unknown'}
+                    </span>
+                    <span className="text-2xs text-tertiary">
+                      {formatRelative(comment.created_at)}
+                      {wasEdited && ' · edited'}
+                    </span>
+                    {isAuthor && !isTemp && !isEditing && (
+                      <button
+                        onClick={() => setEditingCommentId(comment.id)}
+                        className="p-0.5 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover/comment:opacity-100"
+                        title="Edit comment"
+                      >
+                        <Pencil className="size-3" />
+                      </button>
+                    )}
+                    {canDelete && !isEditing && (
+                      <button
+                        onClick={() => handleDeleteComment(comment.id)}
+                        className="p-0.5 rounded text-tertiary hover:text-danger transition-all opacity-100 sm:opacity-0 sm:group-hover/comment:opacity-100"
+                        title="Delete comment"
+                      >
+                        <Trash2 className="size-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {isEditing ? (
+                    <div className="mt-1">
+                      <CommentEditor
+                        taskId={task.id}
+                        members={members}
+                        initialContent={comment.body}
+                        submitLabel="Save"
+                        autoFocus
+                        onSubmit={(html, mentions) => handleEditComment(comment.id, html, mentions)}
+                        onCancel={() => setEditingCommentId(null)}
+                      />
+                    </div>
+                  ) : (
+                    <CommentBody body={comment.body} />
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Add comment */}
+          <CommentEditor
+            taskId={task.id}
+            members={members}
+            onSubmit={handleAddComment}
+          />
+        </div>
+      )}
+    </li>
+  )
+}

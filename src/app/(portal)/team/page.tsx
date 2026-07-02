@@ -74,4 +74,11 @@ export default async function TeamPage({ searchParams }: Props) {
 
       <TeamTabs
         providers={providerList}
-        pe
+        periods={(periods ?? []) as PerformancePeriod[]}
+        projectStats={projectStats}
+        month={month}
+        year={year}
+      />
+    </div>
+  )
+}

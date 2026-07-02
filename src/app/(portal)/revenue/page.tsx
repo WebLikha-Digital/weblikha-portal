@@ -38,3 +38,5 @@ export default async function RevenuePage() {
         </div>
       </div>
     </div>
+  )
+}

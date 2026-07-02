@@ -382,4 +382,11 @@ export function CommentEditor({
           type="button"
           onClick={handleSubmit}
           disabled={editor.isEmpty || uploading}
-          className="flex items-center gap-1.5 h-7 px-3 text-xs bg-brand text-bg-base font-medium rounded-md hover:bg-brand/90 disabled:opacity-40 tr
+          className="flex items-center gap-1.5 h-7 px-3 text-xs bg-brand text-bg-base font-medium rounded-md hover:bg-brand/90 disabled:opacity-40 transition-colors"
+        >
+          <Send className="size-3" /> {submitLabel}
+        </button>
+      </div>
+    </div>
+  )
+}

@@ -53,4 +53,5 @@ export default function PendingPage() {
         </p>
       </div>
     </div>
- 
+  )
+}

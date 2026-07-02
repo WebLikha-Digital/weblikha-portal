@@ -477,4 +477,178 @@ export function TodosTab({
               )}
 
               <div className="flex items-center gap-2 shrink-0">
-  
+                {total > 0 && (
+                  <>
+                    <div className="hidden sm:block w-16 h-1.5 bg-bg-surface-3 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-success rounded-full transition-all"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    <span className="text-2xs text-secondary">{done}/{total}</span>
+                  </>
+                )}
+                {isAdmin && !isTemp && !filtersActive && (
+                  <div className="flex flex-col -my-1">
+                    <button
+                      onClick={() => handleMovePhase(list.id, -1)}
+                      disabled={listIndex === 0}
+                      className="p-0.5 rounded text-tertiary hover:text-primary disabled:opacity-25 transition-colors"
+                      title="Move phase up"
+                    >
+                      <ChevronUp className="size-3" />
+                    </button>
+                    <button
+                      onClick={() => handleMovePhase(list.id, 1)}
+                      disabled={listIndex === optimisticLists.length - 1}
+                      className="p-0.5 rounded text-tertiary hover:text-primary disabled:opacity-25 transition-colors"
+                      title="Move phase down"
+                    >
+                      <ChevronDown className="size-3" />
+                    </button>
+                  </div>
+                )}
+                {isAdmin && !isTemp && (
+                  <button
+                    onClick={() => handleDeletePhase(list.id)}
+                    className="p-1 rounded text-tertiary hover:text-danger transition-colors"
+                    title="Delete phase"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {visibleTasks.length > 0 && (
+              <ul>
+                {visibleTasks.map((task, taskIndex) => (
+                  <TodoItem
+                    key={task.id}
+                    task={task}
+                    listId={list.id}
+                    projectId={projectId}
+                    members={members}
+                    isAdmin={isAdmin}
+                    currentUserId={currentUserId}
+                    onToggle={handleToggleStatus}
+                    onEdit={handleEditTask}
+                    onDelete={handleDeleteTask}
+                    onMove={filtersActive ? undefined : handleMoveTask}
+                    isFirst={taskIndex === 0}
+                    isLast={taskIndex === visibleTasks.length - 1}
+                  />
+                ))}
+              </ul>
+            )}
+
+            {addingTaskTo === list.id ? (
+              <div className="px-4 py-3 border-t border-subtle space-y-2 bg-bg-surface-2">
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Task title"
+                  value={taskTitle}
+                  onChange={e => setTaskTitle(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleAddTask(list.id)
+                    if (e.key === 'Escape') setAddingTaskTo(null)
+                  }}
+                  className="w-full h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary placeholder:text-tertiary focus:outline-none focus:border-brand"
+                />
+                <textarea
+                  placeholder="Description (optional)"
+                  value={taskDescription}
+                  onChange={e => setTaskDescription(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary placeholder:text-tertiary focus:outline-none focus:border-brand resize-y"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    value={taskDueDate}
+                    onChange={e => setTaskDueDate(e.target.value)}
+                    className="h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand"
+                  />
+                  {members.length > 0 && (
+                    <select
+                      value={taskAssigneeId}
+                      onChange={e => setTaskAssigneeId(e.target.value)}
+                      className="h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand flex-1 min-w-[140px]"
+                    >
+                      <option value="">No assignee</option>
+                      {members.map(m => (
+                        <option key={m.user_id} value={m.user_id}>
+                          {m.user.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <button
+                    onClick={() => handleAddTask(list.id)}
+                    disabled={!taskTitle.trim() || !taskDueDate}
+                    className="h-8 px-3 text-sm bg-brand text-bg-base font-medium rounded-md hover:bg-brand/90 disabled:opacity-40 transition-colors"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => setAddingTaskTo(null)}
+                    className="h-8 px-2 text-sm text-secondary hover:text-primary transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => openAddTask(list.id)}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-tertiary hover:text-secondary transition-colors border-t border-subtle"
+              >
+                <Plus className="size-3.5" /> Add to-do
+              </button>
+            )}
+          </div>
+        )
+      })}
+
+      {addingPhase && (
+        <div className="card p-4 flex flex-wrap items-center gap-2">
+          <input
+            autoFocus
+            type="text"
+            placeholder="Phase name (e.g. Design Phase)"
+            value={phaseName}
+            onChange={e => setPhaseName(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleAddPhase()
+              if (e.key === 'Escape') { setAddingPhase(false); setPhaseName('') }
+            }}
+            className="flex-1 min-w-[200px] h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary placeholder:text-tertiary focus:outline-none focus:border-brand"
+          />
+          <button
+            onClick={handleAddPhase}
+            disabled={!phaseName.trim()}
+            className="h-8 px-3 text-sm bg-brand text-bg-base font-medium rounded-md hover:bg-brand/90 disabled:opacity-40 transition-colors"
+          >
+            Add phase
+          </button>
+          <button
+            onClick={() => { setAddingPhase(false); setPhaseName('') }}
+            className="h-8 px-2 text-sm text-secondary hover:text-primary transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {isAdmin && !addingPhase && optimisticLists.length > 0 && (
+        <button
+          onClick={() => setAddingPhase(true)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-tertiary hover:text-secondary border border-dashed border-subtle rounded-lg transition-colors"
+        >
+          <Plus className="size-3.5" /> Add another phase
+        </button>
+      )}
+    </div>
+  )
+}

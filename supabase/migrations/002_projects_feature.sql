@@ -27,7 +27,7 @@ comment on column public.users.role is
 -- =============================================================================
 
 create table public.task_lists (
-  id          uuid        default uuid_generate_v4() primary key,
+  id          uuid        default gen_random_uuid() primary key,
   project_id  uuid        not null references public.projects(id) on delete cascade,
   name        text        not null,
   position    integer     not null default 0,
@@ -56,7 +56,7 @@ create index idx_tasks_task_list_id on public.tasks(task_list_id);
 -- =============================================================================
 
 create table public.messages (
-  id                uuid        default uuid_generate_v4() primary key,
+  id                uuid        default gen_random_uuid() primary key,
   project_id        uuid        not null references public.projects(id) on delete cascade,
   author_id         uuid        references public.users(id) on delete set null,
   title             text        not null,

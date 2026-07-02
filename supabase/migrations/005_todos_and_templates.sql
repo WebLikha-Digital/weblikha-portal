@@ -19,7 +19,7 @@
 -- =============================================================================
 
 CREATE TABLE public.project_templates (
-  id          uuid        DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id          uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
   name        text        NOT NULL,
   description text,
   created_by  uuid        REFERENCES public.users(id) ON DELETE SET NULL,
@@ -32,7 +32,7 @@ COMMENT ON TABLE public.project_templates IS
 
 
 CREATE TABLE public.template_task_lists (
-  id          uuid        DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id          uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
   template_id uuid        NOT NULL REFERENCES public.project_templates(id) ON DELETE CASCADE,
   name        text        NOT NULL,
   position    integer     NOT NULL DEFAULT 0,
@@ -44,7 +44,7 @@ COMMENT ON TABLE public.template_task_lists IS
 
 
 CREATE TABLE public.template_tasks (
-  id                    uuid        DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id                    uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
   template_task_list_id uuid        NOT NULL REFERENCES public.template_task_lists(id) ON DELETE CASCADE,
   title                 text        NOT NULL,
   description           text,

@@ -4,8 +4,8 @@
 -- Run via: Supabase Dashboard → SQL Editor, or `supabase db push`
 -- =============================================================================
 
--- Enable UUID generation
-create extension if not exists "uuid-ossp";
+-- UUID generation uses gen_random_uuid() — built into Postgres 13+, no extension needed.
+-- (uuid-ossp/uuid_generate_v4 breaks under the CLI's search_path; see 2026-07 prod deploy.)
 
 
 -- =============================================================================
@@ -31,7 +31,7 @@ comment on column public.users.role is 'admin = full access; provider = own data
 
 -- Projects
 create table public.projects (
-  id          uuid        default uuid_generate_v4() primary key,
+  id          uuid        default gen_random_uuid() primary key,
   name        text        not null,
   client_name text        not null,
   status      text        not null default 'discovery'
@@ -52,7 +52,7 @@ comment on column public.projects.budget is 'Total agreed project value in PHP.'
 -- Project members
 -- Join table: which team members are on which project, and in what role.
 create table public.project_members (
-  id               uuid        default uuid_generate_v4() primary key,
+  id               uuid        default gen_random_uuid() primary key,
   project_id       uuid        not null references public.projects(id) on delete cascade,
   user_id          uuid        not null references public.users(id) on delete cascade,
   role_in_project  text        not null default 'contributor',
@@ -66,7 +66,7 @@ comment on column public.project_members.role_in_project is 'e.g. Lead Dev, Desi
 -- Tasks
 -- Individual deliverables within a project, assigned to a team member.
 create table public.tasks (
-  id           uuid        default uuid_generate_v4() primary key,
+  id           uuid        default gen_random_uuid() primary key,
   project_id   uuid        not null references public.projects(id) on delete cascade,
   assignee_id  uuid        references public.users(id) on delete set null,
   title        text        not null,
@@ -86,7 +86,7 @@ comment on column public.tasks.points_value is 'Incentive points awarded when st
 -- Monthly rollup of incentive points per team member.
 -- total_points is a generated column — never update it directly.
 create table public.performance_periods (
-  id              uuid        default uuid_generate_v4() primary key,
+  id              uuid        default gen_random_uuid() primary key,
   user_id         uuid        not null references public.users(id) on delete cascade,
   period_month    integer     not null check (period_month between 1 and 12),
   period_year     integer     not null check (period_year >= 2024),
@@ -114,7 +114,7 @@ comment on column public.performance_periods.total_points is 'Computed: task + d
 -- Revenue entries
 -- Individual income or expense line items per project.
 create table public.revenue_entries (
-  id          uuid          default uuid_generate_v4() primary key,
+  id          uuid          default gen_random_uuid() primary key,
   project_id  uuid          not null references public.projects(id) on delete cascade,
   type        text          not null check (type in ('income', 'expense')),
   amount      numeric(12,2) not null check (amount > 0),

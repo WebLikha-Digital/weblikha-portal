@@ -76,9 +76,9 @@ export default async function ProjectsPage() {
   const inactive = projects.filter(p => ['completed', 'archived'].includes(p.status))
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-4 sm:p-6 max-w-5xl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-display font-semibold text-primary">Projects</h1>
           <p className="text-sm text-secondary mt-0.5">
@@ -122,7 +122,4 @@ export default async function ProjectsPage() {
             </section>
           )}
         </>
-      )}
-    </div>
-  )
-}
+   

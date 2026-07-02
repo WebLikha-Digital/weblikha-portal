@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Avatar, Badge, statusLabel } from '@/components/ui'
+import { Avatar, Badge } from '@/components/ui'
 import { formatDate, formatPeso } from '@/lib/utils'
 import type { ProjectWithMembers } from '@/types'
 
@@ -8,10 +8,6 @@ interface ProjectCardProps {
 }
 
 export function ProjectCard({ project }: ProjectCardProps) {
-  const income  = project.revenue_entries
-    .filter(e => e.type === 'income')
-    .reduce((s, e) => s + e.amount, 0)
-
   return (
     <Link
       href={`/projects/${project.id}`}

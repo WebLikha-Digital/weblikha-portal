@@ -35,7 +35,7 @@ export default function PendingPage() {
           </h1>
           <p className="text-sm text-secondary leading-relaxed mb-6">
             Your account has been created. A Weblikha admin will review and approve
-            your access shortly. You'll be able to sign in once approved.
+            your access shortly. You&apos;ll be able to sign in once approved.
           </p>
 
           <form action="/auth/signout" method="post">
@@ -53,5 +53,4 @@ export default function PendingPage() {
         </p>
       </div>
     </div>
-  )
-}
+ 

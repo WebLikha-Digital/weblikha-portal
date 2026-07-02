@@ -1,0 +1,374 @@
+'use client'
+/**
+ * TODO ITEM
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Single task row inside a TodosTab phase card.
+ * Handles: status toggle, inline edit (admin + assignee), completed date,
+ * and an expandable comment thread.
+ *
+ * Comment add/delete is optimistic locally; task field edits are dispatched
+ * up to TodosTab's optimistic reducer via onEdit.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+import { useState, useTransition, useOptimistic } from 'react'
+import { Avatar } from '@/components/ui'
+import { formatDate, formatDateShort, formatRelative, isOverdue, cn } from '@/lib/utils'
+import {
+  CheckCircle2, Circle, CircleDot, AlertCircle, MessageSquare, Pencil, Trash2,
+  ChevronUp, ChevronDown,
+} from 'lucide-react'
+import {
+  createTaskComment, updateTaskComment, deleteTaskComment,
+} from '@/app/(portal)/projects/actions'
+import { CommentEditor } from '@/components/modules/projects/CommentEditor'
+import { CommentBody } from '@/components/modules/projects/CommentBody'
+import { withToast } from '@/components/ui/toast'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import type {
+  TaskWithMeta, TaskStatus, TaskCommentWithAuthor, ProjectMember, User,
+} from '@/types'
+
+export interface TaskEditPatch {
+  title:        string
+  description:  string | null
+  due_date:     string
+  assignee_id:  string | null
+  assignee:     User | null
+  points_value?: number
+}
+
+/** Click cycle: pending → in progress → done → pending */
+const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
+  pending:     'in_progress',
+  in_progress: 'done',
+  done:        'pending',
+}
+
+const STATUS_HINT: Record<TaskStatus, string> = {
+  pending:     'Mark in progress',
+  in_progress: 'Mark done',
+  done:        'Mark incomplete',
+}
+
+interface TodoItemProps {
+  task:          TaskWithMeta
+  listId:        string
+  projectId:    string
+  members:       (ProjectMember & { user: User })[]
+  isAdmin:       boolean
+  currentUserId: string
+  onToggle:      (listId: string, taskId: string, next: TaskStatus) => void
+  onEdit:        (listId: string, taskId: string, patch: TaskEditPatch) => void
+  onDelete:      (listId: string, taskId: string) => void
+  /** Omitted while filters are active — reordering a filtered view is ambiguous */
+  onMove?:       ((listId: string, taskId: string, direction: -1 | 1) => void) | undefined
+  isFirst?:      boolean
+  isLast?:       boolean
+}
+
+type CommentAction =
+  | { type: 'add';    comment: TaskCommentWithAuthor }
+  | { type: 'edit';   commentId: string; body: string; mentions: string[] }
+  | { type: 'delete'; commentId: string }
+
+function commentsReducer(
+  state: TaskCommentWithAuthor[],
+  action: CommentAction,
+): TaskCommentWithAuthor[] {
+  switch (action.type) {
+    case 'add':    return [...state, action.comment]
+    case 'edit':
+      return state.map(c => c.id !== action.commentId ? c : {
+        ...c,
+        body:       action.body,
+        mentions:   action.mentions,
+        updated_at: new Date().toISOString(),
+      })
+    case 'delete': return state.filter(c => c.id !== action.commentId)
+  }
+}
+
+export function TodoItem({
+  task,
+  listId,
+  projectId,
+  members,
+  isAdmin,
+  currentUserId,
+  onToggle,
+  onEdit,
+  onDelete,
+  onMove,
+  isFirst = false,
+  isLast = false,
+}: TodoItemProps) {
+  const [, startTransition] = useTransition()
+  const [optimisticComments, dispatchComment] =
+    useOptimistic(task.comments ?? [], commentsReducer)
+
+  const [editing,          setEditing]          = useState(false)
+  const [showComments,     setShowComments]     = useState(false)
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+
+  const [editTitle,       setEditTitle]       = useState(task.title)
+  const [editDescription, setEditDescription] = useState(task.description ?? '')
+  const [editDueDate,     setEditDueDate]     = useState(task.due_date)
+  const [editAssigneeId,  setEditAssigneeId]  = useState(task.assignee_id ?? '')
+  const [editPoints,      setEditPoints]      = useState(String(task.points_value))
+
+  const isDone     = task.status === 'done'
+  const inProgress = task.status === 'in_progress'
+  const overdue    = !isDone && Boolean(task.due_date) && isOverdue(task.due_date)
+  const isOptTemp = task.id.startsWith('temp-')
+  const canEdit   = !isOptTemp && (isAdmin || task.assignee_id === currentUserId)
+
+  const currentUser = members.find(m => m.user_id === currentUserId)?.user ?? null
+
+  function openEdit() {
+    setEditTitle(task.title)
+    setEditDescription(task.description ?? '')
+    setEditDueDate(task.due_date)
+    setEditAssigneeId(task.assignee_id ?? '')
+    setEditPoints(String(task.points_value))
+    setEditing(true)
+  }
+
+  function handleSaveEdit() {
+    const title = editTitle.trim()
+    if (!title || !editDueDate) return
+    const assignee = members.find(m => m.user_id === editAssigneeId)?.user ?? null
+    const patch: TaskEditPatch = {
+      title,
+      description: editDescription.trim() || null,
+      due_date:    editDueDate,
+      assignee_id: editAssigneeId || null,
+      assignee,
+    }
+    if (isAdmin) {
+      const points = parseInt(editPoints, 10)
+      if (!Number.isNaN(points) && points >= 0) patch.points_value = points
+    }
+    setEditing(false)
+    onEdit(listId, task.id, patch)
+  }
+
+  function handleAddComment(html: string, mentions: string[]) {
+    const now = new Date().toISOString()
+    const optimistic: TaskCommentWithAuthor = {
+      id:         `temp-${Date.now()}`,
+      task_id:    task.id,
+      author_id:  currentUserId,
+      body:       html,
+      mentions,
+      created_at: now,
+      updated_at: now,
+      author:     currentUser,
+    }
+    startTransition(async () => {
+      dispatchComment({ type: 'add', comment: optimistic })
+      await withToast(
+        () => createTaskComment(task.id, projectId, html, mentions),
+        'Could not post the comment.',
+      )
+    })
+  }
+
+  function handleEditComment(commentId: string, html: string, mentions: string[]) {
+    setEditingCommentId(null)
+    startTransition(async () => {
+      dispatchComment({ type: 'edit', commentId, body: html, mentions })
+      await withToast(
+        () => updateTaskComment(commentId, projectId, html, mentions),
+        'Could not save the comment.',
+      )
+    })
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    const ok = await confirmDialog({
+      title:   'Delete this comment?',
+      message: 'The comment and any attached images will be removed.',
+    })
+    if (!ok) return
+    startTransition(async () => {
+      dispatchComment({ type: 'delete', commentId })
+      await withToast(
+        () => deleteTaskComment(commentId, projectId),
+        'Could not delete the comment.',
+      )
+    })
+  }
+
+  return (
+    <li
+      className={cn(
+        'group border-b border-subtle last:border-b-0 transition-colors',
+        isOptTemp && 'opacity-60',
+      )}
+    >
+      {/* Main row */}
+      <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-bg-surface-2 transition-colors">
+        <button
+          onClick={() => { if (!isOptTemp) onToggle(listId, task.id, NEXT_STATUS[task.status]) }}
+          disabled={isOptTemp}
+          className="shrink-0 text-tertiary hover:text-success transition-colors disabled:cursor-default"
+          title={STATUS_HINT[task.status]}
+        >
+          {isDone
+            ? <CheckCircle2 className="size-4 text-success" />
+            : inProgress
+              ? <CircleDot className={cn('size-4', overdue ? 'text-danger' : 'text-warning')} />
+              : overdue
+                ? <AlertCircle className="size-4 text-danger" />
+                : <Circle className="size-4" />
+          }
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <span className={cn(
+            'block truncate text-sm',
+            isDone ? 'line-through text-tertiary' : 'text-primary',
+          )}>
+            {task.title}
+          </span>
+          {task.description && (
+            <p className="truncate text-2xs text-tertiary" title={task.description}>
+              {task.description}
+            </p>
+          )}
+        </div>
+
+        {/* Comment thread toggle — always visible when there are comments */}
+        {!isOptTemp && (
+          <button
+            onClick={() => setShowComments(v => !v)}
+            className={cn(
+              'flex items-center gap-1 p-1 rounded text-2xs transition-all',
+              showComments
+                ? 'text-brand'
+                : optimisticComments.length > 0
+                  ? 'text-secondary hover:text-primary'
+                  : 'text-tertiary hover:text-secondary opacity-100 sm:opacity-0 sm:group-hover:opacity-100',
+            )}
+            title={showComments ? 'Hide comments' : 'Show comments'}
+          >
+            <MessageSquare className="size-3.5" />
+            {optimisticComments.length > 0 && optimisticComments.length}
+          </button>
+        )}
+
+        {task.assignee && (
+          <Avatar
+            name={task.assignee.name}
+            src={task.assignee.avatar_url}
+            size="xs"
+          />
+        )}
+
+        {/* Date: finished date when done, due date otherwise */}
+        {isDone && task.completed_at ? (
+          <span
+            className="text-2xs text-success whitespace-nowrap"
+            title={`Finished ${formatDate(task.completed_at)}`}
+          >
+            ✓ {formatDateShort(task.completed_at)}
+          </span>
+        ) : task.due_date && (
+          <span className={cn(
+            'text-2xs',
+            overdue ? 'text-danger' : 'text-tertiary',
+          )}>
+            {formatDate(task.due_date)}
+          </span>
+        )}
+
+        {onMove && !isOptTemp && (
+          <div className="flex flex-col -my-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => onMove(listId, task.id, -1)}
+              disabled={isFirst}
+              className="p-0.5 rounded text-tertiary hover:text-primary disabled:opacity-25 transition-colors"
+              title="Move up"
+            >
+              <ChevronUp className="size-3" />
+            </button>
+            <button
+              onClick={() => onMove(listId, task.id, 1)}
+              disabled={isLast}
+              className="p-0.5 rounded text-tertiary hover:text-primary disabled:opacity-25 transition-colors"
+              title="Move down"
+            >
+              <ChevronDown className="size-3" />
+            </button>
+          </div>
+        )}
+
+        {canEdit && (
+          <button
+            onClick={() => (editing ? setEditing(false) : openEdit())}
+            className="p-1 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+            title="Edit to-do"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+        )}
+
+        {isAdmin && !isOptTemp && (
+          <button
+            onClick={() => onDelete(listId, task.id)}
+            className="p-1 rounded text-tertiary hover:text-danger transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+            title="Delete task"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* Inline edit form */}
+      {editing && (
+        <div className="px-4 py-3 space-y-2 bg-bg-surface-2 border-t border-subtle">
+          <input
+            autoFocus
+            type="text"
+            value={editTitle}
+            onChange={e => setEditTitle(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter')  handleSaveEdit()
+              if (e.key === 'Escape') setEditing(false)
+            }}
+            className="w-full h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary placeholder:text-tertiary focus:outline-none focus:border-brand"
+          />
+          <textarea
+            placeholder="Description (optional)"
+            value={editDescription}
+            onChange={e => setEditDescription(e.target.value)}
+            rows={2}
+            className="w-full px-3 py-2 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary placeholder:text-tertiary focus:outline-none focus:border-brand resize-y"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={editDueDate}
+              onChange={e => setEditDueDate(e.target.value)}
+              className="h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand"
+            />
+            {members.length > 0 && (
+              <select
+                value={editAssigneeId}
+                onChange={e => setEditAssigneeId(e.target.value)}
+                className="h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand flex-1 min-w-[140px]"
+              >
+                <option value="">No assignee</option>
+                {members.map(m => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {m.user.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {isAdmin && (
+              <input
+                type="number"
+                min={0}
+                value={editPoints}
+     

@@ -10,8 +10,7 @@
  */
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { Sidebar } from '@/components/layout/sidebar'
-import { MobileNav } from '@/components/layout/MobileNav'
+import { PortalShell } from '@/components/layout/PortalShell'
 import type { User } from '@/types'
 
 export default async function PortalLayout({
@@ -48,20 +47,5 @@ export default async function PortalLayout({
 
   const user = profile as User
 
-  return (
-    <div className="flex min-h-screen bg-bg-base">
-      {/* Desktop sidebar — hidden on mobile */}
-      <div className="hidden md:block">
-        <Sidebar user={user} />
-      </div>
-
-      {/* Mobile header + slide-in drawer */}
-      <MobileNav user={user} />
-
-      {/* Main content — offset by sidebar on md+, padded below header on mobile */}
-      <main className="md:ml-[200px] flex-1 min-w-0 pt-14 md:pt-0">
-        {children}
-      </main>
-    </div>
-  )
+  return <PortalShell user={user}>{children}</PortalShell>
 }

@@ -10,6 +10,7 @@ import { StatCard } from '@/components/ui'
 import { formatPeso, percent } from '@/lib/utils'
 import Link from 'next/link'
 import { Badge } from '@/components/ui'
+import type { ProjectStatus } from '@/types'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
@@ -63,7 +64,7 @@ async function AdminDashboard({ supabase }: { supabase: Awaited<ReturnType<typeo
   const onTrack = list.filter(p => p.status === 'in_progress').length
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-4 sm:p-6 max-w-5xl">
       <div className="mb-6">
         <h1 className="text-2xl font-display font-semibold">Dashboard</h1>
         <p className="mt-1 text-xs text-secondary">{dateLabel}</p>
@@ -87,14 +88,14 @@ async function AdminDashboard({ supabase }: { supabase: Awaited<ReturnType<typeo
           <ul>
             {list.slice(0, 6).map((p: { id: string; name: string; client_name: string; status: string; end_date: string }) => (
               <li key={p.id} className="border-b border-subtle last:border-b-0">
-                <Link href={`/projects/${p.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-bg-surface-2 transition-colors">
-                  <div>
-                    <p className="text-sm font-medium text-primary">{p.name}</p>
-                    <p className="text-2xs text-secondary">{p.client_name}</p>
+                <Link href={`/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-bg-surface-2 transition-colors">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-primary truncate">{p.name}</p>
+                    <p className="text-2xs text-secondary truncate">{p.client_name}</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className="text-2xs text-tertiary">Due {new Date(p.end_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                    <Badge status={p.status as Parameters<typeof Badge>[0]['status']} />
+                    <Badge status={p.status as ProjectStatus} />
                   </div>
                 </Link>
               </li>
@@ -163,7 +164,7 @@ async function ProviderDashboard({
   const points = perf?.total_points ?? 0
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-4 sm:p-6 max-w-4xl">
       <div className="mb-6">
         <h1 className="text-2xl font-display font-semibold">Welcome, {userName.split(' ')[0]}</h1>
         <p className="mt-1 text-xs text-secondary">{dateLabel}</p>
@@ -189,14 +190,14 @@ async function ProviderDashboard({
           <ul>
             {activeProjs.map((p: { id: string; name: string; client_name: string; status: string; end_date: string }) => (
               <li key={p.id} className="border-b border-subtle last:border-b-0">
-                <Link href={`/projects/${p.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-bg-surface-2 transition-colors">
-                  <div>
-                    <p className="text-sm font-medium text-primary">{p.name}</p>
-                    <p className="text-2xs text-secondary">{p.client_name}</p>
+                <Link href={`/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-bg-surface-2 transition-colors">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-primary truncate">{p.name}</p>
+                    <p className="text-2xs text-secondary truncate">{p.client_name}</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className="text-2xs text-tertiary">Due {new Date(p.end_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                    <Badge status={p.status as Parameters<typeof Badge>[0]['status']} />
+                    <Badge status={p.status as ProjectStatus} />
                   </div>
                 </Link>
               </li>
@@ -211,23 +212,14 @@ async function ProviderDashboard({
           <h2 className="text-sm font-medium text-primary">Tasks due soon</h2>
         </div>
         {(tasks ?? []).length === 0 ? (
-          <p className="p-6 text-sm text-secondary text-center">No open tasks — you're all caught up!</p>
+          <p className="p-6 text-sm text-secondary text-center">No open tasks — you&apos;re all caught up!</p>
         ) : (
           <ul>
             {(tasks ?? []).map((t: { id: string; title: string; due_date: string; project: { name: string } | null }) => (
-              <li key={t.id} className="flex items-center justify-between px-4 py-2.5 border-b border-subtle last:border-b-0">
-                <div>
-                  <p className="text-sm text-primary">{t.title}</p>
-                  <p className="text-2xs text-secondary">{t.project?.name}</p>
+              <li key={t.id} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-subtle last:border-b-0">
+                <div className="min-w-0">
+                  <p className="text-sm text-primary truncate">{t.title}</p>
+                  <p className="text-2xs text-secondary truncate">{t.project?.name}</p>
                 </div>
-                <span className="text-2xs text-tertiary">
-                  {new Date(t.due_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  )
-}
+                <span className="text-2xs text-tertiary shrink-0 whitespace-nowrap">
+                  {new Date(t

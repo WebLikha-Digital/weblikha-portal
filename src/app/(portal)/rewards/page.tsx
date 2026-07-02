@@ -11,7 +11,7 @@ export default async function RewardsPage() {
   if (!authUser) redirect('/login')
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-4 sm:p-6 max-w-2xl">
       <div className="mb-6">
         <h1 className="text-2xl font-display font-semibold text-primary mb-1">
           Rewards
@@ -39,5 +39,3 @@ export default async function RewardsPage() {
         </div>
       </div>
     </div>
-  )
-}

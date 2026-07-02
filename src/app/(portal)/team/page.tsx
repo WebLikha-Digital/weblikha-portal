@@ -49,7 +49,9 @@ export default async function TeamPage({ searchParams }: Props) {
       .from('project_members')
       .select('user_id, project:projects(status)')
       .in('user_id', providerIds)
-    memberships = (data ?? []) as MembershipRow[]
+    // Supabase's generated join type is loosely inferred (array vs to-one);
+    // at runtime `project` is a single object or null.
+    memberships = (data ?? []) as unknown as MembershipRow[]
   }
 
   // Aggregate stats per provider
@@ -62,7 +64,7 @@ export default async function TeamPage({ searchParams }: Props) {
   })
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-4 sm:p-6 max-w-5xl">
       <div className="mb-6">
         <h1 className="text-2xl font-display font-semibold text-primary">Team</h1>
         <p className="text-sm text-secondary mt-1">
@@ -72,11 +74,4 @@ export default async function TeamPage({ searchParams }: Props) {
 
       <TeamTabs
         providers={providerList}
-        periods={(periods ?? []) as PerformancePeriod[]}
-        projectStats={projectStats}
-        month={month}
-        year={year}
-      />
-    </div>
-  )
-}
+        pe

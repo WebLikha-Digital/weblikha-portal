@@ -23,8 +23,6 @@ export const SKILL_OPTIONS = [
   { value: 'social_media', label: 'Social Media',    color: 'bg-pink-500/10 text-pink-400 border-pink-500/20' },
 ] as const
 
-type SkillValue = typeof SKILL_OPTIONS[number]['value']
-
 const SKILL_MAP = Object.fromEntries(SKILL_OPTIONS.map(s => [s.value, s])) as Record<string, typeof SKILL_OPTIONS[number]>
 
 function skillColor(value: string) {

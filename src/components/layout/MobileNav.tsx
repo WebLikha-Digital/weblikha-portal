@@ -34,7 +34,9 @@ export function MobileNav({ user }: Props) {
   return (
     <>
       {/* ── Mobile sticky header ───────────────────────────────────────────── */}
-      <header className="md:hidden sticky top-0 z-40 flex items-center justify-between h-14 px-4 bg-bg-surface-1 border-b border-subtle">
+      {/* Fixed (not sticky): PortalShell is a flex row, so a sticky header would
+          become a flex column beside <main> instead of a bar above it. */}
+      <header className="md:hidden fixed top-0 inset-x-0 z-40 flex items-center justify-between h-14 px-4 bg-bg-surface-1 border-b border-subtle">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="Weblikha" className="h-9 w-auto" />
         <button
@@ -62,14 +64,6 @@ export function MobileNav({ user }: Props) {
         On desktop (md+): the regular fixed Sidebar takes over — this wrapper
         becomes invisible via md:hidden so there's no duplicate sidebar.
       */}
-      <div
-        className={cn(
-          'md:hidden fixed inset-y-0 left-0 z-[60] transition-transform duration-200 ease-in-out',
-          open ? 'translate-x-0' : '-translate-x-full',
-        )}
-      >
-        <Sidebar user={user} />
-      </div>
-    </>
-  )
-}
+      {/*
+        w-[200px] is required: the Sidebar inside is position:fixed (out of flow),
+       

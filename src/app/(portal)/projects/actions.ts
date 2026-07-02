@@ -1,6 +1,7 @@
 'use server'
 /**
  * PROJECT SERVER ACTIONS
+ * Tasks, task lists, comments, members, and templates.
  */
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -105,6 +106,51 @@ export async function createTaskList(projectId: string, name: string) {
   revalidatePath(`/projects/${projectId}`)
 }
 
+export async function renameTaskList(taskListId: string, projectId: string, name: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') throw new Error('Admin only.')
+
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('Phase name cannot be empty.')
+
+  const { error } = await supabase
+    .from('task_lists').update({ name: trimmed }).eq('id', taskListId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/projects/${projectId}`)
+}
+
+/** Swap a phase with its neighbor (direction: -1 = up, +1 = down). */
+export async function moveTaskList(taskListId: string, projectId: string, direction: -1 | 1) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') throw new Error('Admin only.')
+
+  const { data: lists } = await supabase
+    .from('task_lists')
+    .select('id, position')
+    .eq('project_id', projectId)
+    .order('position', { ascending: true })
+
+  const ordered = lists ?? []
+  const index   = ordered.findIndex(l => l.id === taskListId)
+  const swapWith = ordered[index + direction]
+  const current  = ordered[index]
+  if (!current || !swapWith) return // already at the edge
+
+  await supabase.from('task_lists').update({ position: swapWith.position }).eq('id', current.id)
+  await supabase.from('task_lists').update({ position: current.position }).eq('id', swapWith.id)
+  revalidatePath(`/projects/${projectId}`)
+}
+
 export async function deleteTaskList(taskListId: string, projectId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -128,6 +174,7 @@ export async function createTask(formData: FormData) {
   const projectId   = formData.get('project_id')?.toString() ?? ''
   const taskListId  = formData.get('task_list_id')?.toString() ?? ''
   const title       = formData.get('title')?.toString().trim() ?? ''
+  const description = formData.get('description')?.toString().trim() || null
   const dueDate     = formData.get('due_date')?.toString() ?? ''
   const assigneeId  = formData.get('assignee_id')?.toString() || null
   const pointsValue = parseInt(formData.get('points_value')?.toString() ?? '60', 10)
@@ -136,14 +183,22 @@ export async function createTask(formData: FormData) {
     throw new Error('Title, due date, project and phase are required.')
   }
 
+  // Append to the end of the list
+  const { count } = await supabase
+    .from('tasks')
+    .select('*', { count: 'exact', head: true })
+    .eq('task_list_id', taskListId)
+
   const { error } = await supabase.from('tasks').insert({
     project_id:   projectId,
     task_list_id: taskListId,
     title,
+    description,
     due_date:     dueDate,
     assignee_id:  assigneeId,
     points_value: isNaN(pointsValue) ? 60 : pointsValue,
     status:       'pending',
+    position:     count ?? 0,
   })
   if (error) throw new Error(error.message)
   revalidatePath(`/projects/${projectId}`)
@@ -162,80 +217,24 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, proje
   revalidatePath('/dashboard')
 }
 
-export async function deleteTask(taskId: string, projectId: string) {
+export async function updateTask(
+  taskId: string,
+  projectId: string,
+  fields: {
+    title?:        string
+    description?:  string | null
+    due_date?:     string
+    assignee_id?:  string | null
+    points_value?: number
+  },
+) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
     .from('users').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') throw new Error('Admin only.')
+  const isAdmin = profile?.role === 'admin'
 
-  await supabase.from('tasks').delete().eq('id', taskId)
-  revalidatePath(`/projects/${projectId}`)
-  revalidatePath('/dashboard')
-}
-
-// ── Template actions ───────────────────────────────────────────────────────────
-
-export async function applyTemplate(projectId: string, templateId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('users').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') throw new Error('Admin only.')
-
-  const { data: template, error: tErr } = await supabase
-    .from('project_templates')
-    .select('*, task_lists: template_task_lists(*, tasks: template_tasks(*))')
-    .eq('id', templateId)
-    .single()
-
-  if (tErr || !template) throw new Error('Template not found.')
-
-  const { count: existingCount } = await supabase
-    .from('task_lists')
-    .select('*', { count: 'exact', head: true })
-    .eq('project_id', projectId)
-
-  let positionOffset = existingCount ?? 0
-
-  const sortedLists = [...(template.task_lists ?? [])].sort(
-    (a: { position: number }, b: { position: number }) => a.position - b.position
-  )
-
-  for (const tList of sortedLists) {
-    const { data: newList, error: lErr } = await supabase
-      .from('task_lists')
-      .insert({ project_id: projectId, name: tList.name, position: positionOffset++ })
-      .select('id')
-      .single()
-
-    if (lErr || !newList) continue
-
-    const sortedTasks = [...(tList.tasks ?? [])].sort(
-      (a: { position: number }, b: { position: number }) => a.position - b.position
-    )
-
-    if (sortedTasks.length > 0) {
-      const defaultDue = new Date()
-      defaultDue.setDate(defaultDue.getDate() + 30)
-      const dueDateStr = defaultDue.toISOString().split('T')[0]!
-
-      await supabase.from('tasks').insert(
-        sortedTasks.map((t: { title: string; points_value: number }) => ({
-          project_id:   projectId,
-          task_list_id: newList.id,
-          title:        t.title,
-          due_date:     dueDateStr,
-          points_value: t.points_value ?? 60,
-          status:       'pending',
-        }))
-      )
-    }
-  }
-
-  revalidatePath(`/projects/${projectId}`)
-}
+  const { data: task } = await supabase
+    .from('tasks').select('assign

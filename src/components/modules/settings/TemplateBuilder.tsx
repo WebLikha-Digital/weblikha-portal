@@ -10,13 +10,14 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { useState, useTransition, useOptimistic, useRef, useEffect } from 'react'
-import { Plus, Trash2, Pencil, Check, X, FileText } from 'lucide-react'
+import { Plus, Trash2, Pencil, X, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   createTemplate, updateTemplate, deleteTemplate,
   createTemplatePhase, updateTemplatePhase, deleteTemplatePhase,
   createTemplateTask, deleteTemplateTask,
 } from '@/app/(portal)/settings/actions'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import type { ProjectTemplateWithLists, TemplateTaskList, TemplateTask } from '@/types'
 
 // ── Optimistic reducer ─────────────────────────────────────────────────────────
@@ -116,7 +117,7 @@ function InlineEdit({
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export function TemplateBuilder({ templates }: { templates: ProjectTemplateWithLists[] }) {
-  const [_pending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
   const [optimistic, dispatch]      = useOptimistic(templates, reducer)
   const [selectedId, setSelectedId] = useState<string | null>(templates[0]?.id ?? null)
 
@@ -160,8 +161,12 @@ export function TemplateBuilder({ templates }: { templates: ProjectTemplateWithL
     setSelectedId(tempId)
   }
 
-  function handleDeleteTemplate(id: string) {
-    if (!confirm('Delete this template and all its phases?')) return
+  async function handleDeleteTemplate(id: string) {
+    const ok = await confirmDialog({
+      title:   'Delete this template?',
+      message: 'All of its phases and tasks will be deleted. Existing projects are not affected.',
+    })
+    if (!ok) return
     if (selectedId === id) {
       const remaining = optimistic.filter(t => t.id !== id)
       setSelectedId(remaining[0]?.id ?? null)
@@ -208,8 +213,13 @@ export function TemplateBuilder({ templates }: { templates: ProjectTemplateWithL
     })
   }
 
-  function handleDeletePhase(phaseId: string) {
+  async function handleDeletePhase(phaseId: string) {
     if (!selectedId) return
+    const ok = await confirmDialog({
+      title:   'Delete this phase?',
+      message: 'Its template tasks will be deleted too.',
+    })
+    if (!ok) return
     startTransition(async () => {
       dispatch({ type: 'delete-phase', templateId: selectedId, phaseId })
       await deleteTemplatePhase(phaseId)
@@ -245,8 +255,10 @@ export function TemplateBuilder({ templates }: { templates: ProjectTemplateWithL
     })
   }
 
-  function handleDeleteTask(phaseId: string, taskId: string) {
+  async function handleDeleteTask(phaseId: string, taskId: string) {
     if (!selectedId) return
+    const ok = await confirmDialog({ title: 'Delete this template task?' })
+    if (!ok) return
     startTransition(async () => {
       dispatch({ type: 'delete-task', templateId: selectedId, phaseId, taskId })
       await deleteTemplateTask(taskId)
@@ -256,10 +268,11 @@ export function TemplateBuilder({ templates }: { templates: ProjectTemplateWithL
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex gap-4 min-h-[480px]">
+    // Stacks vertically on mobile; split panel from md up
+    <div className="flex flex-col md:flex-row gap-4 md:min-h-[480px]">
 
       {/* ── Left: template list ── */}
-      <div className="w-52 shrink-0 flex flex-col gap-1">
+      <div className="w-full md:w-52 shrink-0 flex flex-col gap-1">
         {optimistic.map(t => {
           const isTemp   = t.id.startsWith('temp-')
           const isActive = t.id === selectedId
@@ -527,21 +540,4 @@ export function TemplateBuilder({ templates }: { templates: ProjectTemplateWithL
                     onClick={() => { setAddingPhase(false); setNewPhaseName('') }}
                     className="h-8 px-2 text-sm text-secondary hover:text-primary transition-colors"
                   >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setAddingPhase(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-tertiary hover:text-secondary border border-dashed border-subtle rounded-lg transition-colors"
-                >
-                  <Plus className="size-3.5" /> Add phase
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
+               

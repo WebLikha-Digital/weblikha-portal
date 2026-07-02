@@ -2,12 +2,12 @@
 import { useTransition, useOptimistic } from 'react'
 import { Avatar } from '@/components/ui'
 import { Check, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { approveUser, rejectUser } from '@/app/(portal)/settings/actions'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import type { User } from '@/types'
 
 export function ApprovalQueue({ pending }: { pending: User[] }) {
-  const [_isPending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
   const [queue, dispatch] = useOptimistic(
     pending,
     (state: User[], userId: string) => state.filter(u => u.id !== userId),
@@ -20,8 +20,13 @@ export function ApprovalQueue({ pending }: { pending: User[] }) {
     })
   }
 
-  function handleReject(userId: string) {
-    if (!confirm('Remove this user? They will need to sign up again.')) return
+  async function handleReject(userId: string) {
+    const ok = await confirmDialog({
+      title:        'Reject this signup?',
+      message:      'Their account will be removed and they will need to sign up again.',
+      confirmLabel: 'Reject',
+    })
+    if (!ok) return
     startTransition(async () => {
       dispatch(userId)
       await rejectUser(userId)
@@ -59,14 +64,4 @@ export function ApprovalQueue({ pending }: { pending: User[] }) {
             </button>
             <button
               onClick={() => handleReject(user.id)}
-              className="flex items-center gap-1 h-7 px-2 rounded-md text-tertiary hover:text-danger hover:bg-danger/10 transition-colors"
-              title="Reject"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
+              className="flex items-center gap-1 h-7 px-2 rounded-md text-tertiary hover:text-danger hover:bg-danger/10 transition

@@ -13,7 +13,7 @@ export default async function RevenuePage() {
   if (profile?.role !== 'admin') redirect('/dashboard')
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-4 sm:p-6 max-w-4xl">
       <div className="mb-6">
         <h1 className="text-2xl font-display font-semibold text-primary mb-1">
           Revenue
@@ -38,5 +38,3 @@ export default async function RevenuePage() {
         </div>
       </div>
     </div>
-  )
-}

@@ -47,7 +47,7 @@ export default async function SettingsPage() {
   }))
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-4 sm:p-6 max-w-5xl">
       <div className="mb-8">
         <h1 className="text-xl font-display font-semibold text-primary">Settings</h1>
         <p className="text-sm text-secondary mt-1">
@@ -79,5 +79,3 @@ export default async function SettingsPage() {
         <TemplateBuilder templates={templates} />
       </section>
     </div>
-  )
-}

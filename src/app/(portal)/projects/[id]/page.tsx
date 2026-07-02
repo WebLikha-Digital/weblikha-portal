@@ -1,6 +1,7 @@
 /**
  * PROJECT DETAIL PAGE
  * Shows a single project's header + tabbed content (to-dos, messages, team).
+ * To-dos include per-task comment threads (task_comments).
  * Tab switching is handled client-side in ProjectTabsLayout — no URL params needed.
  */
 import type { Metadata } from 'next'
@@ -51,12 +52,13 @@ export default async function ProjectDetailPage({ params }: Props) {
     .eq('role', 'provider').eq('approved', true)
     .order('name', { ascending: true })
 
-  // Task lists + tasks + assignees
+  // Task lists + tasks + assignees + comment threads
   const { data: taskListsRaw } = await supabase
     .from('task_lists')
-    .select('*, tasks(*, assignee: users(*))')
+    .select('*, tasks(*, assignee: users(*), comments: task_comments(*, author: users(*)))')
     .eq('project_id', id)
     .order('position', { ascending: true })
+    .order('position', { referencedTable: 'tasks', ascending: true })
 
   // Messages + authors
   const { data: messagesRaw } = await supabase
@@ -80,12 +82,12 @@ export default async function ProjectDetailPage({ params }: Props) {
   const availableMembers = ((allProviders ?? []) as User[]).filter(u => !memberIds.has(u.id))
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-4 sm:p-6 max-w-4xl">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-secondary mb-5">
-        <Link href="/projects" className="hover:text-primary transition-colors">Projects</Link>
-        <ChevronRight className="size-3.5 text-tertiary" />
-        <span className="text-primary">{project.name}</span>
+      <nav className="flex items-center gap-1.5 text-sm text-secondary mb-5 min-w-0">
+        <Link href="/projects" className="shrink-0 hover:text-primary transition-colors">Projects</Link>
+        <ChevronRight className="size-3.5 shrink-0 text-tertiary" />
+        <span className="text-primary truncate">{project.name}</span>
       </nav>
 
       {/* Project header */}
@@ -100,28 +102,16 @@ export default async function ProjectDetailPage({ params }: Props) {
         {project.description && (
           <p className="text-sm text-secondary mb-3 leading-relaxed">{project.description}</p>
         )}
-        <div className="flex items-center gap-5 text-sm text-secondary">
-          <span className="flex items-center gap-1.5">
-            <CalendarDays className="size-3.5 text-tertiary" />
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-secondary">
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            <CalendarDays className="size-3.5 shrink-0 text-tertiary" />
             {formatDate(project.start_date)} → {formatDate(project.end_date)}
           </span>
-          <span className="flex items-center gap-1.5">
-            <Wallet className="size-3.5 text-tertiary" />
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            <Wallet className="size-3.5 shrink-0 text-tertiary" />
             {formatPeso(project.budget)}
           </span>
         </div>
       </div>
 
-      {/* Tabs + content — instant client-side switching */}
-      <ProjectTabsLayout
-        projectId={id}
-        taskLists={taskLists}
-        messages={messages}
-        members={members}
-        availableMembers={availableMembers}
-        templates={templates}
-        isAdmin={isAdmin}
-      />
-    </div>
-  )
-}
+      {/*

@@ -33,14 +33,14 @@ export function TeamTabs({ providers, periods, projectStats, month, year }: Prop
 
   return (
     <div>
-      {/* Tab bar */}
-      <div className="flex gap-1 border-b border-subtle mb-6">
+      {/* Tab bar — scrolls horizontally on narrow screens instead of wrapping */}
+      <div className="flex gap-1 border-b border-subtle mb-6 overflow-x-auto">
         {TABS.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={cn(
-              'px-4 py-2.5 text-sm transition-colors duration-fast border-b-2 -mb-px',
+              'shrink-0 whitespace-nowrap px-4 py-2.5 text-sm transition-colors duration-fast border-b-2 -mb-px',
               activeTab === tab.key
                 ? 'text-brand border-brand font-medium'
                 : 'text-secondary border-transparent hover:text-primary',
@@ -62,11 +62,4 @@ export function TeamTabs({ providers, periods, projectStats, month, year }: Prop
 
       {activeTab === 'members' && (
         <MembersTab
-          providers={providers}
-          periods={periods}
-          projectStats={projectStats}
-        />
-      )}
-    </div>
-  )
-}
+          providers={provider

@@ -31,6 +31,11 @@ const config: Config = {
           surface1: 'var(--color-bg-surface-1)',
           surface2: 'var(--color-bg-surface-2)',
           surface3: 'var(--color-bg-surface-3)',
+          // Dashed aliases — components write bg-bg-surface-1; without these
+          // keys that class compiles to nothing (transparent backgrounds).
+          'surface-1': 'var(--color-bg-surface-1)',
+          'surface-2': 'var(--color-bg-surface-2)',
+          'surface-3': 'var(--color-bg-surface-3)',
           overlay:  'var(--color-bg-overlay)',
         },
 
@@ -87,21 +92,4 @@ const config: Config = {
       },
 
       borderRadius: {
-        sm:   'var(--radius-sm)',
-        md:   'var(--radius-md)',
-        lg:   'var(--radius-lg)',
-        xl:   'var(--radius-xl)',
-        full: 'var(--radius-full)',
-      },
-
-      transitionDuration: {
-        fast: '100ms',
-        base: '150ms',
-        slow: '250ms',
-      },
-    },
-  },
-  plugins: [],
-}
-
-export default config
+        sm:   'var(--radius-

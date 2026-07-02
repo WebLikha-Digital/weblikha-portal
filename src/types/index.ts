@@ -76,8 +76,19 @@ export interface Task {
   due_date:     string
   completed_at: string | null
   points_value: number        // Default 60 (task completion points)
+  position:     number        // Sort order within the task list
   created_at:   string
   updated_at:   string
+}
+
+export interface TaskComment {
+  id:         string
+  task_id:    string
+  author_id:  string | null
+  body:       string      // Rich-text HTML (legacy rows may be plain text)
+  mentions:   string[]    // User IDs @mentioned in the body
+  created_at: string
+  updated_at: string      // > created_at ⇒ edited
 }
 
 export interface Message {
@@ -123,9 +134,20 @@ export interface ProjectWithMembers extends Project {
   revenue_entries: RevenueEntry[]
 }
 
-/** Task list with its tasks and assignee user data */
+/** Task comment with its author user data */
+export interface TaskCommentWithAuthor extends TaskComment {
+  author: User | null
+}
+
+/** Task with assignee and comment thread — as rendered in TodosTab */
+export type TaskWithMeta = Task & {
+  assignee: User | null
+  comments: TaskCommentWithAuthor[]
+}
+
+/** Task list with its tasks, assignee, and comment data */
 export interface TaskListWithTasks extends TaskList {
-  tasks: (Task & { assignee: User | null })[]
+  tasks: TaskWithMeta[]
 }
 
 /** Message with its author user data */
@@ -204,33 +226,4 @@ export interface MonthlyRevenue {
 
 // ── UI / form types ───────────────────────────────────────────────────────────
 
-/** Payload for creating a new project */
-export interface CreateProjectPayload {
-  name:        string
-  client_name: string
-  status:      ProjectStatus
-  start_date:  string
-  end_date:    string
-  budget:      number
-  description: string | null
-  member_ids:  string[]
-}
-
-/** Payload for creating a task */
-export interface CreateTaskPayload {
-  project_id:  string
-  assignee_id: string
-  title:       string
-  description: string | null
-  due_date:    string
-  points_value: number
-}
-
-/** Payload for admin to update incentive points */
-export interface AdminPointsPayload {
-  user_id:     string
-  month:       number
-  year:        number
-  adminPoints: number
-  adminNote:   string | null
-}
+/** Payload for creating a new pro

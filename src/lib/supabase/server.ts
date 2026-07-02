@@ -14,7 +14,7 @@
  *            a single instance across requests.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export async function createClient() {
@@ -26,17 +26,11 @@ export async function createClient() {
     {
       cookies: {
         getAll()           { return cookieStore.getAll() },
-        setAll(toSet) {
+        setAll(toSet: { name: string; value: string; options: CookieOptions }[]) {
           try {
             toSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options),
             )
           } catch {
             // setAll is called from Server Components where cookies are read-only.
-            // If a middleware is refreshing the session, this error is safe to ignore.
-          }
-        },
-      },
-    },
-  )
-}
+            // If a middleware is refreshing the sessi

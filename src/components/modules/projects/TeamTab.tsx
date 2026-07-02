@@ -4,6 +4,7 @@ import { Avatar } from '@/components/ui'
 import { UserPlus, X, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { addProjectMember, removeProjectMember } from '@/app/(portal)/projects/actions'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import type { ProjectMember, User } from '@/types'
 
 interface TeamTabProps {
@@ -28,7 +29,7 @@ function memberReducer(
 }
 
 export function TeamTab({ projectId, members, availableMembers, isAdmin }: TeamTabProps) {
-  const [_isPending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
   const [optimisticMembers, dispatch] = useOptimistic(members, memberReducer)
   const [showPicker, setShowPicker]   = useState(false)
 
@@ -55,7 +56,14 @@ export function TeamTab({ projectId, members, availableMembers, isAdmin }: TeamT
     })
   }
 
-  function handleRemove(userId: string) {
+  async function handleRemove(userId: string) {
+    const name = optimisticMembers.find(m => m.user_id === userId)?.user.name ?? 'this member'
+    const ok = await confirmDialog({
+      title:        `Remove ${name} from this project?`,
+      message:      'They will lose access to its tasks and message board.',
+      confirmLabel: 'Remove',
+    })
+    if (!ok) return
     startTransition(async () => {
       dispatch({ type: 'remove', userId })
       await removeProjectMember(projectId, userId)
@@ -156,19 +164,4 @@ export function TeamTab({ projectId, members, availableMembers, isAdmin }: TeamT
                         >
                           <Avatar name={u.name} src={u.avatar_url} size="sm" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-primary truncate">{u.name}</p>
-                            <p className="text-2xs text-secondary capitalize">{u.specialty}</p>
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
+                            <p className="text-sm font-medium tex

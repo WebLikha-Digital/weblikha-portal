@@ -1,6 +1,6 @@
 # Project Memory — Weblikha Portal
 
-Consolidated from Cowork session memory (last synced 2026-07-03). Imported into Claude Code via `@MEMORY.md` in CLAUDE.md.
+Consolidated from Cowork session memory (last synced 2026-07-04). Imported into Claude Code via `@MEMORY.md` in CLAUDE.md.
 
 ---
 
@@ -16,7 +16,9 @@ Live on Vercel with separate production Supabase project `vhsuyouczctnkvnnjzgg` 
 - RLS smoke test (provider can't see revenue)
 - Points trigger test
 - Vercel Preview env vars pointed at dev Supabase
-- Possibly rename `master` → `main` to match documented workflow
+- Investigate failing CI check on commit `d8f6bf3`
+
+**Done 2026-07-04:** `master` renamed to `main` locally and on GitHub (duplicate branch deleted). Claude Code agents (`.claude/agents/`) committed to repo.
 
 **Business context:** Matthew is turning this into a productized service — custom apps tailored per client. Client intake forms live in `docs/client-intake-forms.md`.
 

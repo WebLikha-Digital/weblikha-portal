@@ -32,6 +32,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^3.0.0",
+    "resend": "^6.17.1",
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {

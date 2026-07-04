@@ -5,6 +5,7 @@
  */
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { Resend } from 'resend'
 import { createClient } from '@/lib/supabase/server'
 
 async function requireAdmin() {
@@ -21,11 +22,48 @@ async function requireAdmin() {
 
 export async function approveUser(userId: string) {
   const supabase = await requireAdmin()
-  const { error } = await supabase
+  const { data: approved, error } = await supabase
     .from('users').update({ approved: true }).eq('id', userId)
+    .select('email, name').single()
   if (error) throw new Error(error.message)
   revalidatePath('/settings')
-  // TODO: send Resend email (see memory: project_resend_reminder)
+  await sendApprovalEmail(approved.email, approved.name)
+}
+
+/**
+ * Notify a newly approved member by email. Best-effort: approval already
+ * succeeded, so email failures are logged, never thrown.
+ */
+async function sendApprovalEmail(email: string, name: string) {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    console.warn('[approveUser] RESEND_API_KEY not set — skipping approval email')
+    return
+  }
+  try {
+    const resend = new Resend(apiKey)
+    const portalUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+    const { error } = await resend.emails.send({
+      from: process.env.RESEND_FROM ?? 'Weblikha Portal <onboarding@resend.dev>',
+      to: email,
+      subject: "You're approved — welcome to the Weblikha Portal",
+      html: `
+        <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#101010;color:#ffffff;border-radius:12px;">
+          <h1 style="font-size:20px;margin:0 0 16px;">Welcome aboard, ${name}!</h1>
+          <p style="color:#b3b3b3;line-height:1.6;margin:0 0 24px;">
+            Your Weblikha Portal account has been approved. You can now log in
+            to see your projects, tasks, and performance points.
+          </p>
+          <a href="${portalUrl}/login"
+             style="display:inline-block;background:#FDD33C;color:#101010;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;">
+            Log in to the portal
+          </a>
+        </div>`,
+    })
+    if (error) console.error('[approveUser] Resend error:', error.message)
+  } catch (err) {
+    console.error('[approveUser] Failed to send approval email:', err)
+  }
 }
 
 export async function rejectUser(userId: string) {

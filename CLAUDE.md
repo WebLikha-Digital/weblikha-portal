@@ -3,6 +3,8 @@
 This file is read by Claude Code at the start of every session.
 It contains everything needed to understand the codebase without reading every file.
 
+Session memory (current state, working rules, backlog) is in @MEMORY.md
+
 ---
 
 ## What this project is

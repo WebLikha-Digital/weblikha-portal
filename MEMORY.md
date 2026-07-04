@@ -61,6 +61,11 @@ Parked until Revenue, Rewards, Resend email, notifications, message compose, and
 
 ---
 
+### Git commit email
+Always commit as `weblikhadigital@gmail.com` (name "Matthew Kim") — it's the only verified email on the connected GitHub account, and Vercel blocks production deploys from unmatched author emails.
+
+---
+
 ## Environment notes
 
 ### Known typecheck baseline

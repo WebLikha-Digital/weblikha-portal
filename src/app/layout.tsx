@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   icons: {
     icon:     FAVICON,
     shortcut: FAVICON,
-    apple:    '/icons/icon-192.png',
+    apple:    '/icons/apple-touch-icon.png', // 180×180 full-bleed — iOS rounds corners itself
   },
   manifest: '/manifest.json',
   appleWebApp: {

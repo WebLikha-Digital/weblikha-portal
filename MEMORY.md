@@ -1,6 +1,6 @@
 # Project Memory — Weblikha Portal
 
-Consolidated from Cowork session memory (last synced 2026-07-04). Imported into Claude Code via `@MEMORY.md` in CLAUDE.md.
+Consolidated from Cowork session memory (last synced 2026-07-08). Imported into Claude Code via `@MEMORY.md` in CLAUDE.md.
 
 ---
 
@@ -45,6 +45,17 @@ Before starting any new feature, review the Supabase schema:
 
 ### Skeleton loaders on every page
 Every new page route MUST get a `loading.tsx` sibling in the same pass — skeleton approximation of the page using `animate-pulse` + `bg-bg-surface-3` divs, matching the rough structure (header, stat cards, table rows) to avoid layout shift.
+
+### Interaction feedback on every interactive element (added 2026-07-08)
+Every interactive element (buttons, links, rows, toggles) must give visible, subtle, seamless feedback that the action registered:
+
+1. **Hover + press** — `transition-colors duration-150` minimum; subtle press cue like `active:scale-95` or an `active:` background shift
+2. **Keyboard focus** — `focus-visible:ring` styles using token colors
+3. **Async actions** — pending state (spinner/label swap) + disabled while in flight; no silent buttons, no double-submit
+4. **Outcome confirmation** — mutations confirm success/failure (toast from `@/components/ui/toast` or inline state change), never silent completion
+5. **Taste** — ~150ms ease-out; nothing flashy or slow
+
+Prefer baking these states into `@/components/ui` primitives so features inherit them. Enforced as rule #8 in the `ui-convention-checker` agent (`.claude/agents/ui-convention-checker.md`).
 
 ---
 

@@ -256,3 +256,26 @@ export interface AdminPointsPayload {
   adminPoints: number
   adminNote:   string | null
 }
+
+// ── Notifications ──────────────────────────────────────────────────────────────────
+
+export type NotificationType = 'mention' | 'task_assigned'
+
+/** notifications table row (named to avoid clashing with the DOM Notification type) */
+export interface AppNotification {
+  id:         string
+  user_id:    string
+  actor_id:   string | null
+  type:       NotificationType
+  project_id: string
+  task_id:    string | null
+  comment_id: string | null
+  read_at:    string | null
+  created_at: string
+}
+
+/** Notification with the joined actor + task the bell dropdown renders */
+export interface NotificationWithMeta extends AppNotification {
+  actor: Pick<User, 'id' | 'name' | 'avatar_url'> | null
+  task:  { id: string; title: string } | null
+}

@@ -5,6 +5,7 @@
  */
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { Resend } from 'resend'
 import { createClient } from '@/lib/supabase/server'
 import type { TaskStatus } from '@/types'
 
@@ -380,6 +381,66 @@ export async function deleteTask(taskId: string, projectId: string) {
 // ── Task comment actions ───────────────────────────────────────────────────────
 // RLS enforces the real permissions (admin or project member, author-only delete);
 // these actions stay thin and surface DB errors.
+// In-app notifications are inserted by DB triggers (migration 013); the email
+// side of mentions is handled here since it needs Resend.
+
+/**
+ * Email newly @mentioned users. Best-effort: the comment already saved, so
+ * email failures are logged, never thrown. In-app notifications are handled
+ * separately by the notify_comment_mentions trigger.
+ */
+async function sendMentionEmails(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  mentionIds: string[],
+  authorId: string,
+  taskId: string,
+  projectId: string,
+) {
+  const targets = Array.from(new Set(mentionIds)).filter(id => id !== authorId)
+  if (targets.length === 0) return
+
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    console.warn('[mentions] RESEND_API_KEY not set — skipping mention emails')
+    return
+  }
+
+  try {
+    const [{ data: users }, { data: task }, { data: author }] = await Promise.all([
+      supabase.from('users').select('email, name').in('id', targets),
+      supabase.from('tasks').select('title').eq('id', taskId).single(),
+      supabase.from('users').select('name').eq('id', authorId).single(),
+    ])
+    if (!users || users.length === 0) return
+
+    const resend     = new Resend(apiKey)
+    const portalUrl  = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+    const authorName = author?.name ?? 'A teammate'
+    const taskTitle  = task?.title ?? 'a task'
+
+    await Promise.all(users.map(u =>
+      resend.emails.send({
+        from: process.env.RESEND_FROM ?? 'Weblikha Portal <onboarding@resend.dev>',
+        to: u.email,
+        subject: `${authorName} mentioned you on "${taskTitle}"`,
+        html: `
+          <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#101010;color:#ffffff;border-radius:12px;">
+            <h1 style="font-size:18px;margin:0 0 16px;">${authorName} mentioned you</h1>
+            <p style="color:#b3b3b3;line-height:1.6;margin:0 0 24px;">
+              You were mentioned in a comment on the to-do
+              <strong style="color:#ffffff;">${taskTitle}</strong>.
+            </p>
+            <a href="${portalUrl}/projects/${projectId}?tab=todos"
+               style="display:inline-block;background:#FDD33C;color:#101010;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;">
+              Open the to-do
+            </a>
+          </div>`,
+      })
+    ))
+  } catch (err) {
+    console.error('[mentions] Failed to send mention emails:', err)
+  }
+}
 
 export async function createTaskComment(
   taskId: string,
@@ -400,6 +461,8 @@ export async function createTaskComment(
     .insert({ task_id: taskId, author_id: user.id, body: trimmed, mentions })
   if (error) throw new Error(error.message)
 
+  await sendMentionEmails(supabase, mentions, user.id, taskId, projectId)
+
   revalidatePath(`/projects/${projectId}`)
 }
 
@@ -417,12 +480,25 @@ export async function updateTaskComment(
   if (!trimmed) throw new Error('Comment cannot be empty.')
   if (trimmed.length > 20000) throw new Error('Comment is too long.')
 
+  // Snapshot previous mentions so only newly added people get emailed
+  const { data: existing } = await supabase
+    .from('task_comments')
+    .select('mentions, task_id')
+    .eq('id', commentId)
+    .single()
+
   // RLS: only the author (or admin) can update; others match zero rows
   const { error } = await supabase
     .from('task_comments')
     .update({ body: trimmed, mentions })
     .eq('id', commentId)
   if (error) throw new Error(error.message)
+
+  if (existing) {
+    const previous    = existing.mentions ?? []
+    const newMentions = mentions.filter(m => !previous.includes(m))
+    await sendMentionEmails(supabase, newMentions, user.id, existing.task_id, projectId)
+  }
 
   revalidatePath(`/projects/${projectId}`)
 }

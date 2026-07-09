@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui'
+import { NotificationsBell } from '@/components/layout/NotificationsBell'
 import type { User } from '@/types'
 
 // ── Navigation config ──────────────────────────────────────────────────────────
@@ -129,6 +130,14 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
 
       {/* Bottom section */}
       <div className="border-t border-subtle px-2 py-3">
+        {/* Notifications — desktop sidebar only; mobile gets the header bell.
+            (onToggle is only passed to the desktop sidebar.) */}
+        {onToggle && (
+          <div className="mb-2">
+            <NotificationsBell variant="sidebar" collapsed={collapsed} />
+          </div>
+        )}
+
         {/* Collapse toggle — desktop only, styled like a nav item */}
         {onToggle && (
           <button

@@ -10,6 +10,7 @@ import { usePathname } from 'next/navigation'
 import { Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sidebar } from './sidebar'
+import { NotificationsBell } from '@/components/layout/NotificationsBell'
 import type { User } from '@/types'
 
 interface Props {
@@ -39,13 +40,16 @@ export function MobileNav({ user }: Props) {
       <header className="md:hidden fixed top-0 inset-x-0 z-40 flex items-center justify-between h-14 px-4 bg-bg-surface-1 border-b border-subtle">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="Weblikha" className="h-9 w-auto" />
-        <button
-          onClick={() => setOpen(v => !v)}
-          className="p-1.5 rounded-md text-secondary hover:text-primary hover:bg-bg-overlay transition-colors"
-          aria-label={open ? 'Close menu' : 'Open menu'}
-        >
-          {open ? <X className="size-5" /> : <Menu className="size-5" />}
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationsBell variant="header" />
+          <button
+            onClick={() => setOpen(v => !v)}
+            className="p-1.5 rounded-md text-secondary hover:text-primary hover:bg-bg-overlay transition-colors"
+            aria-label={open ? 'Close menu' : 'Open menu'}
+          >
+            {open ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
+        </div>
       </header>
 
       {/* ── Backdrop ──────────────────────────────────────────────────────── */}

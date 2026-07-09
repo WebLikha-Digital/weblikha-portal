@@ -57,11 +57,13 @@
   /* iOS Safari auto-zooms into any form control with a font-size under 16px.
      Bump controls (and the Tiptap editor) to 16px on small screens only —
      desktop keeps the design sizes. Fixing it here is better than
-     viewport maximum-scale=1, which would break pinch-zoom accessibility. */
+     viewport maximum-scale=1, which would break pinch-zoom accessibility.
+     !important is required: components set text-sm (14px) via utility
+     classes, which otherwise outrank this base-layer rule. */
   @media (max-width: 639px) {
     input, textarea, select,
     .comment-editor .ProseMirror {
-      font-size: 16px;
+      font-size: 16px !important;
     }
   }
 

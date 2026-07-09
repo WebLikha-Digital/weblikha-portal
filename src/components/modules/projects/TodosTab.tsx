@@ -636,7 +636,7 @@ export function TodosTab({
               >
                 {({ attributes, listeners }) => (
                   <>
-                    <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-subtle">
+                    <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-subtle select-none sm:select-auto">
                       <div className="flex items-center gap-1 min-w-0 flex-1">
                         {canReorderPhases && !isTemp && (
                           <button

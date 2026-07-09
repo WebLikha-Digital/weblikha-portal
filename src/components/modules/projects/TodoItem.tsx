@@ -236,7 +236,8 @@ export function TodoItem({
       )}
     >
       {/* Main row */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 hover:bg-bg-surface-2 transition-colors">
+      {/* select-none on mobile: long-press means "drag", not "select text" */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 hover:bg-bg-surface-2 transition-colors select-none sm:select-auto">
         {canReorder && !isOptTemp && (
           <button
             {...attributes}

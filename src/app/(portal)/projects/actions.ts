@@ -418,7 +418,7 @@ async function sendMentionEmails(
     const authorName = author?.name ?? 'A teammate'
     const taskTitle  = task?.title ?? 'a task'
 
-    await Promise.all(users.map(u =>
+    const results = await Promise.all(users.map(u =>
       resend.emails.send({
         from: process.env.RESEND_FROM ?? 'Weblikha Portal <onboarding@resend.dev>',
         to: u.email,
@@ -437,6 +437,10 @@ async function sendMentionEmails(
           </div>`,
       })
     ))
+    // The SDK returns errors instead of throwing — surface them in the logs
+    for (const r of results) {
+      if (r.error) console.error('[mentions] Resend error:', r.error.message)
+    }
   } catch (err) {
     console.error('[mentions] Failed to send mention emails:', err)
   }

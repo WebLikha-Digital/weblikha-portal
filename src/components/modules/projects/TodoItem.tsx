@@ -232,7 +232,7 @@ export function TodoItem({
       className={cn(
         'group border-b border-subtle last:border-b-0 transition-colors',
         isOptTemp && 'opacity-60',
-        isDragging && 'relative z-10 bg-bg-surface-2 shadow-lg opacity-90',
+        isDragging && 'opacity-30', // source stays dimmed in place; DragOverlay is the moving copy
       )}
     >
       {/* Main row */}

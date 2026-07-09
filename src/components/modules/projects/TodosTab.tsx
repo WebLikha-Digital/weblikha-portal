@@ -7,8 +7,8 @@
  */
 import { useState, useEffect, useTransition, useOptimistic } from 'react'
 import {
-  DndContext, closestCorners, MouseSensor, TouchSensor, useSensor, useSensors,
-  type DragEndEvent, type DraggableAttributes,
+  DndContext, DragOverlay, closestCorners, MouseSensor, TouchSensor, useSensor, useSensors,
+  type DragEndEvent, type DragStartEvent, type DraggableAttributes,
 } from '@dnd-kit/core'
 import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
@@ -181,7 +181,7 @@ function SortablePhase({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(className, isDragging && 'relative z-10 shadow-xl opacity-90')}
+      className={cn(className, isDragging && 'opacity-40')}
     >
       {children({ attributes, listeners })}
     </div>
@@ -242,7 +242,11 @@ export function TodosTab({
   const [filterOverdue,  setFilterOverdue]  = useState(false)
   const filtersActive = filterAssignee !== 'all' || filterOverdue
 
-  const canReorder = isAdmin && !filtersActive
+  const isMember = members.some(m => m.user_id === currentUserId)
+
+  // Any project member can drag tasks; phase structure stays admin-only
+  const canReorderTasks  = (isAdmin || isMember) && !filtersActive
+  const canReorderPhases = isAdmin && !filtersActive
 
   // Desktop: drag after 6px so clicks still work. Mobile: long-press so the
   // page scrolls normally.
@@ -250,6 +254,26 @@ export function TodosTab({
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   )
+
+  // Floating copy rendered while dragging — phase cards are overflow-hidden,
+  // so the row itself gets clipped the moment it leaves its own card.
+  const [activeDrag, setActiveDrag] = useState<
+    | { kind: 'task';  task: TaskWithMeta }
+    | { kind: 'phase'; list: TaskListWithTasks }
+    | null
+  >(null)
+
+  function handleDragStart(event: DragStartEvent) {
+    const data = event.active.data.current as { type?: string; listId?: string } | undefined
+    if (data?.type === 'task') {
+      const list = optimisticLists.find(l => l.id === data.listId)
+      const task = list?.tasks.find(t => t.id === String(event.active.id))
+      if (task) setActiveDrag({ kind: 'task', task })
+    } else if (data?.type === 'phase') {
+      const list = optimisticLists.find(l => l.id === String(event.active.id))
+      if (list) setActiveDrag({ kind: 'phase', list })
+    }
+  }
 
   function matchesFilters(t: TaskWithMeta): boolean {
     if (filterAssignee === 'unassigned' && t.assignee_id !== null) return false
@@ -403,6 +427,7 @@ export function TodosTab({
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    setActiveDrag(null)
     const { active, over } = event
     if (!over) return
 
@@ -578,7 +603,13 @@ export function TodosTab({
         )}
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragCancel={() => setActiveDrag(null)}
+        onDragEnd={handleDragEnd}
+      >
         <SortableContext
           items={optimisticLists.map(l => l.id)}
           strategy={verticalListSortingStrategy}
@@ -600,14 +631,14 @@ export function TodosTab({
               <SortablePhase
                 key={list.id}
                 id={list.id}
-                disabled={!canReorder || isTemp}
+                disabled={!canReorderPhases || isTemp}
                 className={cn('card overflow-hidden transition-opacity', isTemp && 'opacity-60')}
               >
                 {({ attributes, listeners }) => (
                   <>
                     <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-subtle">
                       <div className="flex items-center gap-1 min-w-0 flex-1">
-                        {canReorder && !isTemp && (
+                        {canReorderPhases && !isTemp && (
                           <button
                             {...attributes}
                             {...listeners}
@@ -715,7 +746,7 @@ export function TodosTab({
                                   onEdit={handleEditTask}
                                   onDelete={handleDeleteTask}
                                   onClaim={handleClaimTask}
-                                  canReorder={canReorder}
+                                  canReorder={canReorderTasks}
                                 />
                               ))}
                             </ul>
@@ -795,6 +826,34 @@ export function TodosTab({
             )
           })}
         </SortableContext>
+
+        <DragOverlay>
+          {activeDrag?.kind === 'task' && (
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-brand/40 bg-bg-surface-2 shadow-xl cursor-grabbing">
+              <GripVertical className="size-3.5 text-tertiary shrink-0" />
+              <span className={cn(
+                'truncate text-sm',
+                activeDrag.task.status === 'done' ? 'line-through text-tertiary' : 'text-primary',
+              )}>
+                {activeDrag.task.title}
+              </span>
+              {activeDrag.task.assignee && (
+                <span className="ml-auto text-2xs text-tertiary shrink-0">
+                  {activeDrag.task.assignee.name}
+                </span>
+              )}
+            </div>
+          )}
+          {activeDrag?.kind === 'phase' && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-brand/40 bg-bg-surface-2 shadow-xl cursor-grabbing">
+              <GripVertical className="size-3.5 text-tertiary shrink-0" />
+              <span className="text-sm font-medium text-primary truncate">{activeDrag.list.name}</span>
+              <span className="text-2xs text-tertiary shrink-0">
+                {activeDrag.list.tasks.length} task{activeDrag.list.tasks.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
+        </DragOverlay>
       </DndContext>
 
       {addingPhase && (

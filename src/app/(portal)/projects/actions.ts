@@ -291,7 +291,8 @@ export async function updateTask(
 
 /**
  * Move a task to a new index, optionally into another phase (drag-and-drop).
- * Rewrites positions in the affected list(s); only changed rows are updated.
+ * Delegates to the reorder_task RPC (migration 012): security definer, so any
+ * project member can reorder; renumbering runs atomically in one transaction.
  */
 export async function reorderTask(
   taskId: string,
@@ -303,60 +304,13 @@ export async function reorderTask(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('users').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') throw new Error('Admin only.')
+  const { error } = await supabase.rpc('reorder_task', {
+    p_task_id:    taskId,
+    p_to_list_id: toListId,
+    p_to_index:   toIndex,
+  })
+  if (error) throw new Error(error.message)
 
-  const { data: task } = await supabase
-    .from('tasks').select('id, task_list_id').eq('id', taskId).single()
-  if (!task) throw new Error('Task not found.')
-
-  const fromListId = task.task_list_id
-
-  const { data: sourceTasks } = await supabase
-    .from('tasks')
-    .select('id, position')
-    .eq('task_list_id', fromListId)
-    .order('position', { ascending: true })
-
-  const source    = (sourceTasks ?? []).map(t => t.id)
-  const fromIndex = source.indexOf(taskId)
-  if (fromIndex === -1) throw new Error('Task not found in its phase.')
-  source.splice(fromIndex, 1)
-
-  const updates: PromiseLike<unknown>[] = []
-
-  if (fromListId === toListId) {
-    const clamped = Math.max(0, Math.min(toIndex, source.length))
-    source.splice(clamped, 0, taskId)
-    source.forEach((id, i) => {
-      updates.push(supabase.from('tasks').update({ position: i }).eq('id', id))
-    })
-  } else {
-    const { data: targetTasks } = await supabase
-      .from('tasks')
-      .select('id, position')
-      .eq('task_list_id', toListId)
-      .order('position', { ascending: true })
-
-    const target  = (targetTasks ?? []).map(t => t.id)
-    const clamped = Math.max(0, Math.min(toIndex, target.length))
-    target.splice(clamped, 0, taskId)
-
-    // Moved task changes list + position; neighbors in both lists renumber
-    source.forEach((id, i) => {
-      updates.push(supabase.from('tasks').update({ position: i }).eq('id', id))
-    })
-    target.forEach((id, i) => {
-      updates.push(
-        id === taskId
-          ? supabase.from('tasks').update({ task_list_id: toListId, position: i }).eq('id', id)
-          : supabase.from('tasks').update({ position: i }).eq('id', id)
-      )
-    })
-  }
-
-  await Promise.all(updates)
   revalidatePath(`/projects/${projectId}`)
 }
 

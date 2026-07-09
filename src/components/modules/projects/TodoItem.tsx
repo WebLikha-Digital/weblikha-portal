@@ -236,7 +236,7 @@ export function TodoItem({
       )}
     >
       {/* Main row */}
-      <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-bg-surface-2 transition-colors">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 hover:bg-bg-surface-2 transition-colors">
         {canReorder && !isOptTemp && (
           <button
             {...attributes}
@@ -278,6 +278,10 @@ export function TodoItem({
             </p>
           )}
         </div>
+
+        {/* Actions — inline on desktop; on mobile they wrap onto their own
+            row below the title so the title stays fully readable */}
+        <div className="flex items-center gap-2 sm:gap-3 basis-full sm:basis-auto pl-7 sm:pl-0">
 
         {/* Still saving (optimistic create) */}
         {isOptTemp && <SavingIndicator />}
@@ -338,25 +342,29 @@ export function TodoItem({
           </span>
         )}
 
-        {canEdit && (
-          <button
-            onClick={() => (editing ? setEditing(false) : openEdit())}
-            className="p-1 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-            title="Edit to-do"
-          >
-            <Pencil className="size-3.5" />
-          </button>
-        )}
+        {/* Edit + delete — pushed to the right edge on mobile */}
+        <div className="flex items-center gap-1 ml-auto sm:ml-0">
+          {canEdit && (
+            <button
+              onClick={() => (editing ? setEditing(false) : openEdit())}
+              className="p-1 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+              title="Edit to-do"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+          )}
 
-        {isAdmin && !isOptTemp && (
-          <button
-            onClick={() => onDelete(listId, task.id)}
-            className="p-1 rounded text-tertiary hover:text-danger transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-            title="Delete task"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
-        )}
+          {isAdmin && !isOptTemp && (
+            <button
+              onClick={() => onDelete(listId, task.id)}
+              className="p-1 rounded text-tertiary hover:text-danger transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+              title="Delete task"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          )}
+        </div>
+        </div>
       </div>
 
       {/* Inline edit form */}

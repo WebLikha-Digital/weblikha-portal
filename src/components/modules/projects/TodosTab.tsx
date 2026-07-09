@@ -1,21 +1,32 @@
 'use client'
 /**
  * TODOS TAB — phases, tasks, optimistic updates. Task rows render via TodoItem.
- * Includes assignee/overdue filtering, phase rename + reorder (admin).
+ * Includes assignee/overdue filtering, phase rename + collapse, and
+ * drag-and-drop reordering (admin): tasks within/between phases, phases
+ * within the project. Mobile: long-press to drag.
  */
-import { useState, useTransition, useOptimistic } from 'react'
+import { useState, useEffect, useTransition, useOptimistic } from 'react'
+import {
+  DndContext, closestCorners, MouseSensor, TouchSensor, useSensor, useSensors,
+  type DragEndEvent, type DraggableAttributes,
+} from '@dnd-kit/core'
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { cn, isOverdue } from '@/lib/utils'
 import {
-  CheckCircle2, Plus, Trash2, ChevronDown, ChevronUp, Pencil, ListFilter,
+  CheckCircle2, Plus, Trash2, ChevronDown, Pencil, ListFilter, GripVertical, Loader2,
 } from 'lucide-react'
 import {
   createTaskList,
   renameTaskList,
-  moveTaskList,
+  reorderTaskList,
   createTask,
   updateTask,
   updateTaskStatus,
-  moveTask,
+  reorderTask,
+  claimTask,
   deleteTask,
   deleteTaskList,
   applyTemplate as applyTemplateAction,
@@ -37,27 +48,16 @@ interface TodosTabProps {
 }
 
 type OptimisticAction =
-  | { type: 'toggle';       taskListId: string; taskId: string; status: TaskStatus }
-  | { type: 'add-task';     taskListId: string; task: TaskWithMeta }
-  | { type: 'edit-task';    taskListId: string; taskId: string; patch: TaskEditPatch }
-  | { type: 'move-task';    taskListId: string; taskId: string; direction: -1 | 1 }
-  | { type: 'delete-task';  taskListId: string; taskId: string }
-  | { type: 'add-phase';    list: TaskListWithTasks }
-  | { type: 'rename-phase'; taskListId: string; name: string }
-  | { type: 'move-phase';   taskListId: string; direction: -1 | 1 }
-  | { type: 'delete-phase'; taskListId: string }
-
-function swapAdjacent<T>(arr: T[], index: number, direction: -1 | 1): T[] {
-  const target = index + direction
-  if (index < 0 || target < 0 || target >= arr.length) return arr
-  const next = [...arr]
-  const a = next[index]
-  const b = next[target]
-  if (a === undefined || b === undefined) return arr
-  next[index]  = b
-  next[target] = a
-  return next
-}
+  | { type: 'toggle';        taskListId: string; taskId: string; status: TaskStatus }
+  | { type: 'add-task';      taskListId: string; task: TaskWithMeta }
+  | { type: 'edit-task';     taskListId: string; taskId: string; patch: TaskEditPatch }
+  | { type: 'claim-task';    taskListId: string; taskId: string; assignee: User }
+  | { type: 'reorder-task';  taskId: string; fromListId: string; toListId: string; toIndex: number }
+  | { type: 'delete-task';   taskListId: string; taskId: string }
+  | { type: 'add-phase';     list: TaskListWithTasks }
+  | { type: 'rename-phase';  taskListId: string; name: string }
+  | { type: 'reorder-phase'; taskListId: string; toIndex: number }
+  | { type: 'delete-phase';  taskListId: string }
 
 function optimisticReducer(
   state: TaskListWithTasks[],
@@ -87,17 +87,45 @@ function optimisticReducer(
           ),
         }
       )
-    case 'move-task':
+    case 'claim-task':
       return state.map(list =>
         list.id !== action.taskListId ? list : {
           ...list,
-          tasks: swapAdjacent(
-            list.tasks,
-            list.tasks.findIndex(t => t.id === action.taskId),
-            action.direction,
+          tasks: list.tasks.map(t =>
+            t.id !== action.taskId ? t : {
+              ...t,
+              assignee_id: action.assignee.id,
+              assignee:    action.assignee,
+            }
           ),
         }
       )
+    case 'reorder-task': {
+      const fromList = state.find(l => l.id === action.fromListId)
+      const moved    = fromList?.tasks.find(t => t.id === action.taskId)
+      if (!moved) return state
+
+      if (action.fromListId === action.toListId) {
+        return state.map(list => {
+          if (list.id !== action.fromListId) return list
+          const fromIndex = list.tasks.findIndex(t => t.id === action.taskId)
+          if (fromIndex === -1) return list
+          return { ...list, tasks: arrayMove(list.tasks, fromIndex, action.toIndex) }
+        })
+      }
+
+      return state.map(list => {
+        if (list.id === action.fromListId) {
+          return { ...list, tasks: list.tasks.filter(t => t.id !== action.taskId) }
+        }
+        if (list.id === action.toListId) {
+          const next = [...list.tasks]
+          next.splice(action.toIndex, 0, { ...moved, task_list_id: action.toListId })
+          return { ...list, tasks: next }
+        }
+        return list
+      })
+    }
     case 'add-task':
       return state.map(list =>
         list.id !== action.taskListId ? list : {
@@ -118,15 +146,46 @@ function optimisticReducer(
       return state.map(list =>
         list.id !== action.taskListId ? list : { ...list, name: action.name }
       )
-    case 'move-phase':
-      return swapAdjacent(
-        state,
-        state.findIndex(l => l.id === action.taskListId),
-        action.direction,
-      )
+    case 'reorder-phase': {
+      const fromIndex = state.findIndex(l => l.id === action.taskListId)
+      if (fromIndex === -1) return state
+      return arrayMove(state, fromIndex, action.toIndex)
+    }
     case 'delete-phase':
       return state.filter(list => list.id !== action.taskListId)
   }
+}
+
+/** Sortable wrapper for a phase card; exposes drag-handle props to the header. */
+type PhaseHandle = {
+  attributes: DraggableAttributes
+  listeners:  ReturnType<typeof useSortable>['listeners']
+}
+
+function SortablePhase({
+  id,
+  disabled,
+  className,
+  children,
+}: {
+  id:        string
+  disabled:  boolean
+  className: string
+  children:  (handle: PhaseHandle) => React.ReactNode
+}) {
+  const {
+    attributes, listeners, setNodeRef, transform, transition, isDragging,
+  } = useSortable({ id, data: { type: 'phase' }, disabled })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(className, isDragging && 'relative z-10 shadow-xl opacity-90')}
+    >
+      {children({ attributes, listeners })}
+    </div>
+  )
 }
 
 export function TodosTab({
@@ -154,10 +213,43 @@ export function TodosTab({
 
   const [showTemplates, setShowTemplates] = useState(false)
 
+  // Collapsed phases — persisted per project so the layout survives reloads
+  const collapseKey = `todos-collapsed:${projectId}`
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(collapseKey)
+      if (raw) setCollapsed(new Set(JSON.parse(raw) as string[]))
+    } catch { /* corrupt or unavailable storage — start expanded */ }
+  }, [collapseKey])
+
+  function toggleCollapsed(listId: string) {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(listId)) {
+        next.delete(listId)
+      } else {
+        next.add(listId)
+      }
+      try { localStorage.setItem(collapseKey, JSON.stringify([...next])) } catch { /* ignore */ }
+      return next
+    })
+  }
+
   // Filters — 'all' | 'unassigned' | userId, plus overdue-only
   const [filterAssignee, setFilterAssignee] = useState('all')
   const [filterOverdue,  setFilterOverdue]  = useState(false)
   const filtersActive = filterAssignee !== 'all' || filterOverdue
+
+  const canReorder = isAdmin && !filtersActive
+
+  // Desktop: drag after 6px so clicks still work. Mobile: long-press so the
+  // page scrolls normally.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+  )
 
   function matchesFilters(t: TaskWithMeta): boolean {
     if (filterAssignee === 'unassigned' && t.assignee_id !== null) return false
@@ -232,12 +324,14 @@ export function TodosTab({
     })
   }
 
-  function handleMoveTask(taskListId: string, taskId: string, direction: -1 | 1) {
+  function handleClaimTask(taskListId: string, taskId: string) {
+    const me = members.find(m => m.user_id === currentUserId)?.user
+    if (!me) return
     startTransition(async () => {
-      dispatch({ type: 'move-task', taskListId, taskId, direction })
+      dispatch({ type: 'claim-task', taskListId, taskId, assignee: me })
       await withToast(
-        () => moveTask(taskId, taskListId, projectId, direction),
-        'Could not reorder the task.',
+        () => claimTask(taskId, projectId),
+        'Could not assign this task to you.',
       )
     })
   }
@@ -286,16 +380,6 @@ export function TodosTab({
     })
   }
 
-  function handleMovePhase(taskListId: string, direction: -1 | 1) {
-    startTransition(async () => {
-      dispatch({ type: 'move-phase', taskListId, direction })
-      await withToast(
-        () => moveTaskList(taskListId, projectId, direction),
-        'Could not reorder the phase.',
-      )
-    })
-  }
-
   async function handleDeletePhase(taskListId: string) {
     const ok = await confirmDialog({
       title:   'Delete this phase?',
@@ -314,6 +398,72 @@ export function TodosTab({
       await withToast(
         () => applyTemplateAction(projectId, templateId),
         'Could not apply the template.',
+      )
+    })
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over) return
+
+    const activeData = active.data.current as { type?: string; listId?: string } | undefined
+    const overData   = over.data.current   as { type?: string; listId?: string } | undefined
+
+    // ── Phase reorder ──
+    if (activeData?.type === 'phase') {
+      const overPhaseId = overData?.type === 'phase' ? String(over.id) : overData?.listId
+      if (!overPhaseId || overPhaseId === String(active.id)) return
+      const toIndex = optimisticLists.findIndex(l => l.id === overPhaseId)
+      if (toIndex === -1) return
+      const phaseId = String(active.id)
+      startTransition(async () => {
+        dispatch({ type: 'reorder-phase', taskListId: phaseId, toIndex })
+        await withToast(
+          () => reorderTaskList(phaseId, projectId, toIndex),
+          'Could not reorder the phase.',
+        )
+      })
+      return
+    }
+
+    // ── Task reorder / move between phases ──
+    const taskId     = String(active.id)
+    const fromListId = activeData?.listId
+    if (!fromListId) return
+
+    let toListId: string
+    let toIndex:  number
+
+    if (overData?.type === 'task') {
+      if (String(over.id) === taskId) return
+      toListId = overData.listId ?? fromListId
+      const targetList = optimisticLists.find(l => l.id === toListId)
+      if (!targetList) return
+      toIndex = targetList.tasks.findIndex(t => t.id === String(over.id))
+      if (toIndex === -1) return
+    } else if (overData?.type === 'phase') {
+      toListId = String(over.id)
+      const targetList = optimisticLists.find(l => l.id === toListId)
+      if (!targetList) return
+      // Dropping on the phase card itself appends to the end
+      toIndex = toListId === fromListId
+        ? Math.max(0, targetList.tasks.length - 1)
+        : targetList.tasks.length
+    } else {
+      return
+    }
+
+    if (toListId === fromListId) {
+      const fromList  = optimisticLists.find(l => l.id === fromListId)
+      const fromIndex = fromList?.tasks.findIndex(t => t.id === taskId) ?? -1
+      if (fromIndex === -1 || fromIndex === toIndex) return
+    }
+
+    startTransition(async () => {
+      dispatch({ type: 'reorder-task', taskId, fromListId, toListId, toIndex })
+      await withToast(
+        () => reorderTask(taskId, projectId, toListId, toIndex),
+        'Could not move the task.',
       )
     })
   }
@@ -428,188 +578,224 @@ export function TodosTab({
         )}
       </div>
 
-      {optimisticLists.map((list, listIndex) => {
-        const total    = list.tasks.length
-        const done     = list.tasks.filter(t => t.status === 'done').length
-        const progress = total > 0 ? Math.round((done / total) * 100) : 0
-        const isTemp   = list.id.startsWith('temp-')
-        const visibleTasks = list.tasks.filter(matchesFilters)
-        const isRenaming   = renamingPhaseId === list.id
+      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+        <SortableContext
+          items={optimisticLists.map(l => l.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {optimisticLists.map(list => {
+            const total    = list.tasks.length
+            const done     = list.tasks.filter(t => t.status === 'done').length
+            const progress = total > 0 ? Math.round((done / total) * 100) : 0
+            const isTemp   = list.id.startsWith('temp-')
+            const visibleTasks = list.tasks.filter(matchesFilters)
+            const isRenaming   = renamingPhaseId === list.id
+            // While filtering, collapse state is ignored so matches stay visible
+            const isCollapsed  = collapsed.has(list.id) && !filtersActive
 
-        // Hide phases with no matching tasks while filtering
-        if (filtersActive && visibleTasks.length === 0) return null
+            // Hide phases with no matching tasks while filtering
+            if (filtersActive && visibleTasks.length === 0) return null
 
-        return (
-          <div
-            key={list.id}
-            className={cn('card overflow-hidden transition-opacity', isTemp && 'opacity-60')}
-          >
-            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-subtle">
-              {isRenaming ? (
-                <input
-                  autoFocus
-                  type="text"
-                  value={renameValue}
-                  onChange={e => setRenameValue(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter')  handleRenamePhase(list.id)
-                    if (e.key === 'Escape') setRenamingPhaseId(null)
-                  }}
-                  onBlur={() => handleRenamePhase(list.id)}
-                  className="flex-1 min-w-0 h-7 px-2 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand"
-                />
-              ) : (
-                <div className="group/phase flex items-center gap-2 min-w-0">
-                  <h3 className="text-sm font-medium text-primary truncate">{list.name}</h3>
-                  <span className="shrink-0 text-2xs text-tertiary bg-bg-surface-3 px-2 py-0.5 rounded-full">
-                    {total} task{total !== 1 ? 's' : ''}
-                  </span>
-                  {isAdmin && !isTemp && (
-                    <button
-                      onClick={() => { setRenamingPhaseId(list.id); setRenameValue(list.name) }}
-                      className="p-1 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover/phase:opacity-100"
-                      title="Rename phase"
-                    >
-                      <Pencil className="size-3" />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 shrink-0">
-                {total > 0 && (
+            return (
+              <SortablePhase
+                key={list.id}
+                id={list.id}
+                disabled={!canReorder || isTemp}
+                className={cn('card overflow-hidden transition-opacity', isTemp && 'opacity-60')}
+              >
+                {({ attributes, listeners }) => (
                   <>
-                    <div className="hidden sm:block w-16 h-1.5 bg-bg-surface-3 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-success rounded-full transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
+                    <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-subtle">
+                      <div className="flex items-center gap-1 min-w-0 flex-1">
+                        {canReorder && !isTemp && (
+                          <button
+                            {...attributes}
+                            {...listeners}
+                            className="shrink-0 -ml-2 p-0.5 rounded text-tertiary hover:text-secondary touch-none cursor-grab active:cursor-grabbing transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand"
+                            title="Drag to reorder phase"
+                            aria-label="Drag to reorder phase"
+                          >
+                            <GripVertical className="size-3.5" />
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => toggleCollapsed(list.id)}
+                          disabled={filtersActive}
+                          className="shrink-0 p-0.5 rounded text-tertiary hover:text-primary transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand"
+                          title={isCollapsed ? 'Expand phase' : 'Collapse phase'}
+                          aria-expanded={!isCollapsed}
+                        >
+                          <ChevronDown className={cn(
+                            'size-3.5 transition-transform duration-150',
+                            isCollapsed && '-rotate-90',
+                          )} />
+                        </button>
+
+                        {isRenaming ? (
+                          <input
+                            autoFocus
+                            type="text"
+                            value={renameValue}
+                            onChange={e => setRenameValue(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter')  handleRenamePhase(list.id)
+                              if (e.key === 'Escape') setRenamingPhaseId(null)
+                            }}
+                            onBlur={() => handleRenamePhase(list.id)}
+                            className="flex-1 min-w-0 h-7 px-2 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand"
+                          />
+                        ) : (
+                          <div className="group/phase flex items-center gap-2 min-w-0">
+                            <h3 className="text-sm font-medium text-primary truncate">{list.name}</h3>
+                            <span className="shrink-0 text-2xs text-tertiary bg-bg-surface-3 px-2 py-0.5 rounded-full">
+                              {total} task{total !== 1 ? 's' : ''}
+                            </span>
+                            {isTemp && (
+                              <span className="flex items-center gap-1 text-2xs text-tertiary whitespace-nowrap">
+                                <Loader2 className="size-3 animate-spin" aria-hidden />
+                                Saving…
+                              </span>
+                            )}
+                            {isAdmin && !isTemp && (
+                              <button
+                                onClick={() => { setRenamingPhaseId(list.id); setRenameValue(list.name) }}
+                                className="p-1 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover/phase:opacity-100"
+                                title="Rename phase"
+                              >
+                                <Pencil className="size-3" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {total > 0 && (
+                          <>
+                            <div className="hidden sm:block w-16 h-1.5 bg-bg-surface-3 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-success rounded-full transition-all"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                            <span className="text-2xs text-secondary">{done}/{total}</span>
+                          </>
+                        )}
+                        {isAdmin && !isTemp && (
+                          <button
+                            onClick={() => handleDeletePhase(list.id)}
+                            className="p-1 rounded text-tertiary hover:text-danger transition-colors"
+                            title="Delete phase"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-2xs text-secondary">{done}/{total}</span>
+
+                    {!isCollapsed && (
+                      <>
+                        {visibleTasks.length > 0 && (
+                          <SortableContext
+                            items={visibleTasks.map(t => t.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            <ul>
+                              {visibleTasks.map(task => (
+                                <TodoItem
+                                  key={task.id}
+                                  task={task}
+                                  listId={list.id}
+                                  projectId={projectId}
+                                  members={members}
+                                  isAdmin={isAdmin}
+                                  currentUserId={currentUserId}
+                                  onToggle={handleToggleStatus}
+                                  onEdit={handleEditTask}
+                                  onDelete={handleDeleteTask}
+                                  onClaim={handleClaimTask}
+                                  canReorder={canReorder}
+                                />
+                              ))}
+                            </ul>
+                          </SortableContext>
+                        )}
+
+                        {addingTaskTo === list.id ? (
+                          <div className="px-4 py-3 border-t border-subtle space-y-2 bg-bg-surface-2">
+                            <input
+                              autoFocus
+                              type="text"
+                              placeholder="Task title"
+                              value={taskTitle}
+                              onChange={e => setTaskTitle(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleAddTask(list.id)
+                                if (e.key === 'Escape') setAddingTaskTo(null)
+                              }}
+                              className="w-full h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary placeholder:text-tertiary focus:outline-none focus:border-brand"
+                            />
+                            <textarea
+                              placeholder="Description (optional)"
+                              value={taskDescription}
+                              onChange={e => setTaskDescription(e.target.value)}
+                              rows={2}
+                              className="w-full px-3 py-2 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary placeholder:text-tertiary focus:outline-none focus:border-brand resize-y"
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                              <input
+                                type="date"
+                                value={taskDueDate}
+                                onChange={e => setTaskDueDate(e.target.value)}
+                                className="h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand"
+                              />
+                              {members.length > 0 && (
+                                <select
+                                  value={taskAssigneeId}
+                                  onChange={e => setTaskAssigneeId(e.target.value)}
+                                  className="h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand flex-1 min-w-[140px]"
+                                >
+                                  <option value="">No assignee</option>
+                                  {members.map(m => (
+                                    <option key={m.user_id} value={m.user_id}>
+                                      {m.user.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                              <button
+                                onClick={() => handleAddTask(list.id)}
+                                disabled={!taskTitle.trim() || !taskDueDate}
+                                className="h-8 px-3 text-sm bg-brand text-bg-base font-medium rounded-md hover:bg-brand/90 disabled:opacity-40 transition-colors"
+                              >
+                                Add
+                              </button>
+                              <button
+                                onClick={() => setAddingTaskTo(null)}
+                                className="h-8 px-2 text-sm text-secondary hover:text-primary transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => openAddTask(list.id)}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-tertiary hover:text-secondary transition-colors border-t border-subtle"
+                          >
+                            <Plus className="size-3.5" /> Add to-do
+                          </button>
+                        )}
+                      </>
+                    )}
                   </>
                 )}
-                {isAdmin && !isTemp && !filtersActive && (
-                  <div className="flex flex-col -my-1">
-                    <button
-                      onClick={() => handleMovePhase(list.id, -1)}
-                      disabled={listIndex === 0}
-                      className="p-0.5 rounded text-tertiary hover:text-primary disabled:opacity-25 transition-colors"
-                      title="Move phase up"
-                    >
-                      <ChevronUp className="size-3" />
-                    </button>
-                    <button
-                      onClick={() => handleMovePhase(list.id, 1)}
-                      disabled={listIndex === optimisticLists.length - 1}
-                      className="p-0.5 rounded text-tertiary hover:text-primary disabled:opacity-25 transition-colors"
-                      title="Move phase down"
-                    >
-                      <ChevronDown className="size-3" />
-                    </button>
-                  </div>
-                )}
-                {isAdmin && !isTemp && (
-                  <button
-                    onClick={() => handleDeletePhase(list.id)}
-                    className="p-1 rounded text-tertiary hover:text-danger transition-colors"
-                    title="Delete phase"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {visibleTasks.length > 0 && (
-              <ul>
-                {visibleTasks.map((task, taskIndex) => (
-                  <TodoItem
-                    key={task.id}
-                    task={task}
-                    listId={list.id}
-                    projectId={projectId}
-                    members={members}
-                    isAdmin={isAdmin}
-                    currentUserId={currentUserId}
-                    onToggle={handleToggleStatus}
-                    onEdit={handleEditTask}
-                    onDelete={handleDeleteTask}
-                    onMove={filtersActive ? undefined : handleMoveTask}
-                    isFirst={taskIndex === 0}
-                    isLast={taskIndex === visibleTasks.length - 1}
-                  />
-                ))}
-              </ul>
-            )}
-
-            {addingTaskTo === list.id ? (
-              <div className="px-4 py-3 border-t border-subtle space-y-2 bg-bg-surface-2">
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Task title"
-                  value={taskTitle}
-                  onChange={e => setTaskTitle(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') handleAddTask(list.id)
-                    if (e.key === 'Escape') setAddingTaskTo(null)
-                  }}
-                  className="w-full h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary placeholder:text-tertiary focus:outline-none focus:border-brand"
-                />
-                <textarea
-                  placeholder="Description (optional)"
-                  value={taskDescription}
-                  onChange={e => setTaskDescription(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary placeholder:text-tertiary focus:outline-none focus:border-brand resize-y"
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="date"
-                    value={taskDueDate}
-                    onChange={e => setTaskDueDate(e.target.value)}
-                    className="h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand"
-                  />
-                  {members.length > 0 && (
-                    <select
-                      value={taskAssigneeId}
-                      onChange={e => setTaskAssigneeId(e.target.value)}
-                      className="h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand flex-1 min-w-[140px]"
-                    >
-                      <option value="">No assignee</option>
-                      {members.map(m => (
-                        <option key={m.user_id} value={m.user_id}>
-                          {m.user.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  <button
-                    onClick={() => handleAddTask(list.id)}
-                    disabled={!taskTitle.trim() || !taskDueDate}
-                    className="h-8 px-3 text-sm bg-brand text-bg-base font-medium rounded-md hover:bg-brand/90 disabled:opacity-40 transition-colors"
-                  >
-                    Add
-                  </button>
-                  <button
-                    onClick={() => setAddingTaskTo(null)}
-                    className="h-8 px-2 text-sm text-secondary hover:text-primary transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => openAddTask(list.id)}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-tertiary hover:text-secondary transition-colors border-t border-subtle"
-              >
-                <Plus className="size-3.5" /> Add to-do
-              </button>
-            )}
-          </div>
-        )
-      })}
+              </SortablePhase>
+            )
+          })}
+        </SortableContext>
+      </DndContext>
 
       {addingPhase && (
         <div className="card p-4 flex flex-wrap items-center gap-2">

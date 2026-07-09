@@ -4,18 +4,21 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Single task row inside a TodosTab phase card.
  * Handles: status toggle, inline edit (admin + assignee), completed date,
- * and an expandable comment thread.
+ * drag-and-drop reordering (admin), self-claim for providers, and an
+ * expandable comment thread.
  *
  * Comment add/delete is optimistic locally; task field edits are dispatched
  * up to TodosTab's optimistic reducer via onEdit.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { useState, useTransition, useOptimistic } from 'react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Avatar } from '@/components/ui'
 import { formatDate, formatDateShort, formatRelative, isOverdue, cn } from '@/lib/utils'
 import {
   CheckCircle2, Circle, CircleDot, AlertCircle, MessageSquare, Pencil, Trash2,
-  ChevronUp, ChevronDown,
+  GripVertical, UserPlus, Loader2,
 } from 'lucide-react'
 import {
   createTaskComment, updateTaskComment, deleteTaskComment,
@@ -60,10 +63,9 @@ interface TodoItemProps {
   onToggle:      (listId: string, taskId: string, next: TaskStatus) => void
   onEdit:        (listId: string, taskId: string, patch: TaskEditPatch) => void
   onDelete:      (listId: string, taskId: string) => void
-  /** Omitted while filters are active — reordering a filtered view is ambiguous */
-  onMove?:       ((listId: string, taskId: string, direction: -1 | 1) => void) | undefined
-  isFirst?:      boolean
-  isLast?:       boolean
+  onClaim:       (listId: string, taskId: string) => void
+  /** False while filters are active — reordering a filtered view is ambiguous */
+  canReorder:    boolean
 }
 
 type CommentAction =
@@ -88,6 +90,16 @@ function commentsReducer(
   }
 }
 
+/** Small shared "still saving" hint for optimistic items */
+function SavingIndicator({ className }: { className?: string }) {
+  return (
+    <span className={cn('flex items-center gap-1 text-2xs text-tertiary whitespace-nowrap', className)}>
+      <Loader2 className="size-3 animate-spin" aria-hidden />
+      Saving…
+    </span>
+  )
+}
+
 export function TodoItem({
   task,
   listId,
@@ -98,9 +110,8 @@ export function TodoItem({
   onToggle,
   onEdit,
   onDelete,
-  onMove,
-  isFirst = false,
-  isLast = false,
+  onClaim,
+  canReorder,
 }: TodoItemProps) {
   const [, startTransition] = useTransition()
   const [optimisticComments, dispatchComment] =
@@ -121,8 +132,23 @@ export function TodoItem({
   const overdue    = !isDone && Boolean(task.due_date) && isOverdue(task.due_date)
   const isOptTemp = task.id.startsWith('temp-')
   const canEdit   = !isOptTemp && (isAdmin || task.assignee_id === currentUserId)
+  const canClaim  = !isOptTemp && !isAdmin && !task.assignee_id &&
+                    members.some(m => m.user_id === currentUserId)
 
   const currentUser = members.find(m => m.user_id === currentUserId)?.user ?? null
+
+  // Providers can only assign to themselves; admins can assign anyone
+  const assignableMembers = isAdmin
+    ? members
+    : members.filter(m => m.user_id === currentUserId)
+
+  const {
+    attributes, listeners, setNodeRef, transform, transition, isDragging,
+  } = useSortable({
+    id:       task.id,
+    data:     { type: 'task', listId },
+    disabled: !canReorder || isOptTemp,
+  })
 
   function openEdit() {
     setEditTitle(task.title)
@@ -201,13 +227,28 @@ export function TodoItem({
 
   return (
     <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
         'group border-b border-subtle last:border-b-0 transition-colors',
         isOptTemp && 'opacity-60',
+        isDragging && 'relative z-10 bg-bg-surface-2 shadow-lg opacity-90',
       )}
     >
       {/* Main row */}
       <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-bg-surface-2 transition-colors">
+        {canReorder && !isOptTemp && (
+          <button
+            {...attributes}
+            {...listeners}
+            className="shrink-0 -ml-1.5 p-0.5 rounded text-tertiary hover:text-secondary touch-none cursor-grab active:cursor-grabbing transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand"
+            title="Drag to reorder"
+            aria-label="Drag to reorder"
+          >
+            <GripVertical className="size-3.5" />
+          </button>
+        )}
+
         <button
           onClick={() => { if (!isOptTemp) onToggle(listId, task.id, NEXT_STATUS[task.status]) }}
           disabled={isOptTemp}
@@ -237,6 +278,21 @@ export function TodoItem({
             </p>
           )}
         </div>
+
+        {/* Still saving (optimistic create) */}
+        {isOptTemp && <SavingIndicator />}
+
+        {/* Provider self-assign on unassigned tasks */}
+        {canClaim && (
+          <button
+            onClick={() => onClaim(listId, task.id)}
+            className="flex items-center gap-1 h-6 px-2 rounded-full border border-subtle text-2xs text-secondary hover:text-brand hover:border-brand active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand"
+            title="Assign this to-do to yourself"
+          >
+            <UserPlus className="size-3" />
+            <span className="hidden sm:inline">Assign me</span>
+          </button>
+        )}
 
         {/* Comment thread toggle — always visible when there are comments */}
         {!isOptTemp && (
@@ -280,27 +336,6 @@ export function TodoItem({
           )}>
             {formatDate(task.due_date)}
           </span>
-        )}
-
-        {onMove && !isOptTemp && (
-          <div className="flex flex-col -my-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={() => onMove(listId, task.id, -1)}
-              disabled={isFirst}
-              className="p-0.5 rounded text-tertiary hover:text-primary disabled:opacity-25 transition-colors"
-              title="Move up"
-            >
-              <ChevronUp className="size-3" />
-            </button>
-            <button
-              onClick={() => onMove(listId, task.id, 1)}
-              disabled={isLast}
-              className="p-0.5 rounded text-tertiary hover:text-primary disabled:opacity-25 transition-colors"
-              title="Move down"
-            >
-              <ChevronDown className="size-3" />
-            </button>
-          </div>
         )}
 
         {canEdit && (
@@ -352,16 +387,16 @@ export function TodoItem({
               onChange={e => setEditDueDate(e.target.value)}
               className="h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand"
             />
-            {members.length > 0 && (
+            {assignableMembers.length > 0 && (
               <select
                 value={editAssigneeId}
                 onChange={e => setEditAssigneeId(e.target.value)}
                 className="h-8 px-3 text-sm bg-bg-surface-3 border border-subtle rounded-md text-primary focus:outline-none focus:border-brand flex-1 min-w-[140px]"
               >
                 <option value="">No assignee</option>
-                {members.map(m => (
+                {assignableMembers.map(m => (
                   <option key={m.user_id} value={m.user_id}>
-                    {m.user.name}
+                    {m.user_id === currentUserId && !isAdmin ? 'Me' : m.user.name}
                   </option>
                 ))}
               </select>
@@ -426,6 +461,7 @@ export function TodoItem({
                       {formatRelative(comment.created_at)}
                       {wasEdited && ' · edited'}
                     </span>
+                    {isTemp && <SavingIndicator />}
                     {isAuthor && !isTemp && !isEditing && (
                       <button
                         onClick={() => setEditingCommentId(comment.id)}

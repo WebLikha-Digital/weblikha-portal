@@ -124,8 +124,8 @@ export async function renameTaskList(taskListId: string, projectId: string, name
   revalidatePath(`/projects/${projectId}`)
 }
 
-/** Swap a phase with its neighbor (direction: -1 = up, +1 = down). */
-export async function moveTaskList(taskListId: string, projectId: string, direction: -1 | 1) {
+/** Move a phase to a new index within the project (drag-and-drop). */
+export async function reorderTaskList(taskListId: string, projectId: string, toIndex: number) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -140,14 +140,26 @@ export async function moveTaskList(taskListId: string, projectId: string, direct
     .eq('project_id', projectId)
     .order('position', { ascending: true })
 
-  const ordered = lists ?? []
-  const index   = ordered.findIndex(l => l.id === taskListId)
-  const swapWith = ordered[index + direction]
-  const current  = ordered[index]
-  if (!current || !swapWith) return // already at the edge
+  const ordered   = lists ?? []
+  const fromIndex = ordered.findIndex(l => l.id === taskListId)
+  if (fromIndex === -1) throw new Error('Phase not found.')
 
-  await supabase.from('task_lists').update({ position: swapWith.position }).eq('id', current.id)
-  await supabase.from('task_lists').update({ position: current.position }).eq('id', swapWith.id)
+  const clamped = Math.max(0, Math.min(toIndex, ordered.length - 1))
+  if (clamped === fromIndex) return
+
+  const next = [...ordered]
+  const [moved] = next.splice(fromIndex, 1)
+  if (!moved) return
+  next.splice(clamped, 0, moved)
+
+  // Rewrite only the positions that changed
+  await Promise.all(
+    next.flatMap((l, i) =>
+      l.position === i
+        ? []
+        : [supabase.from('task_lists').update({ position: i }).eq('id', l.id)]
+    )
+  )
   revalidatePath(`/projects/${projectId}`)
 }
 
@@ -253,7 +265,13 @@ export async function updateTask(
   }
   if (fields.description !== undefined) updates.description = fields.description
   if (fields.due_date !== undefined)    updates.due_date    = fields.due_date
-  if (fields.assignee_id !== undefined) updates.assignee_id = fields.assignee_id
+  if (fields.assignee_id !== undefined) {
+    // Providers may only assign to themselves or unassign — never to someone else
+    if (!isAdmin && fields.assignee_id !== null && fields.assignee_id !== user.id) {
+      throw new Error('You can only assign this task to yourself.')
+    }
+    updates.assignee_id = fields.assignee_id
+  }
 
   // Points affect incentive payouts — admin only
   if (fields.points_value !== undefined) {
@@ -271,27 +289,99 @@ export async function updateTask(
   revalidatePath('/dashboard')
 }
 
-/** Swap a task with its neighbor in the same list (direction: -1 = up, +1 = down). */
-export async function moveTask(taskId: string, taskListId: string, projectId: string, direction: -1 | 1) {
+/**
+ * Move a task to a new index, optionally into another phase (drag-and-drop).
+ * Rewrites positions in the affected list(s); only changed rows are updated.
+ */
+export async function reorderTask(
+  taskId: string,
+  projectId: string,
+  toListId: string,
+  toIndex: number,
+) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: tasks } = await supabase
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') throw new Error('Admin only.')
+
+  const { data: task } = await supabase
+    .from('tasks').select('id, task_list_id').eq('id', taskId).single()
+  if (!task) throw new Error('Task not found.')
+
+  const fromListId = task.task_list_id
+
+  const { data: sourceTasks } = await supabase
     .from('tasks')
     .select('id, position')
-    .eq('task_list_id', taskListId)
+    .eq('task_list_id', fromListId)
     .order('position', { ascending: true })
 
-  const ordered  = tasks ?? []
-  const index    = ordered.findIndex(t => t.id === taskId)
-  const current  = ordered[index]
-  const swapWith = ordered[index + direction]
-  if (!current || !swapWith) return // already at the edge
+  const source    = (sourceTasks ?? []).map(t => t.id)
+  const fromIndex = source.indexOf(taskId)
+  if (fromIndex === -1) throw new Error('Task not found in its phase.')
+  source.splice(fromIndex, 1)
 
-  await supabase.from('tasks').update({ position: swapWith.position }).eq('id', current.id)
-  await supabase.from('tasks').update({ position: current.position }).eq('id', swapWith.id)
+  const updates: PromiseLike<unknown>[] = []
+
+  if (fromListId === toListId) {
+    const clamped = Math.max(0, Math.min(toIndex, source.length))
+    source.splice(clamped, 0, taskId)
+    source.forEach((id, i) => {
+      updates.push(supabase.from('tasks').update({ position: i }).eq('id', id))
+    })
+  } else {
+    const { data: targetTasks } = await supabase
+      .from('tasks')
+      .select('id, position')
+      .eq('task_list_id', toListId)
+      .order('position', { ascending: true })
+
+    const target  = (targetTasks ?? []).map(t => t.id)
+    const clamped = Math.max(0, Math.min(toIndex, target.length))
+    target.splice(clamped, 0, taskId)
+
+    // Moved task changes list + position; neighbors in both lists renumber
+    source.forEach((id, i) => {
+      updates.push(supabase.from('tasks').update({ position: i }).eq('id', id))
+    })
+    target.forEach((id, i) => {
+      updates.push(
+        id === taskId
+          ? supabase.from('tasks').update({ task_list_id: toListId, position: i }).eq('id', id)
+          : supabase.from('tasks').update({ position: i }).eq('id', id)
+      )
+    })
+  }
+
+  await Promise.all(updates)
   revalidatePath(`/projects/${projectId}`)
+}
+
+/** A project member claims an unassigned task for themselves. */
+export async function claimTask(taskId: string, projectId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  // Guarded update: only succeeds while the task is still unassigned.
+  // RLS ("tasks: member claims unassigned") enforces project membership.
+  const { data, error } = await supabase
+    .from('tasks')
+    .update({ assignee_id: user.id })
+    .eq('id', taskId)
+    .is('assignee_id', null)
+    .select('id')
+
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) {
+    throw new Error('This task was already claimed by someone else.')
+  }
+
+  revalidatePath(`/projects/${projectId}`)
+  revalidatePath('/dashboard')
 }
 
 /**

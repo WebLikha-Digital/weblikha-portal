@@ -58,6 +58,7 @@ interface TodoItemProps {
   listId:        string
   projectId:    string
   members:       (ProjectMember & { user: User })[]
+  admins:        User[]
   isAdmin:       boolean
   currentUserId: string
   onToggle:      (listId: string, taskId: string, next: TaskStatus) => void
@@ -105,6 +106,7 @@ export function TodoItem({
   listId,
   projectId,
   members,
+  admins,
   isAdmin,
   currentUserId,
   onToggle,
@@ -496,6 +498,7 @@ export function TodoItem({
                       <CommentEditor
                         taskId={task.id}
                         members={members}
+                        admins={admins}
                         initialContent={comment.body}
                         submitLabel="Save"
                         autoFocus
@@ -515,6 +518,7 @@ export function TodoItem({
           <CommentEditor
             taskId={task.id}
             members={members}
+            admins={admins}
             onSubmit={handleAddComment}
           />
         </div>

@@ -43,6 +43,7 @@ interface TodosTabProps {
   projectId:     string
   currentUserId: string
   members:       (ProjectMember & { user: User })[]
+  admins:        User[]
   templates:     ProjectTemplate[]
   isAdmin:       boolean
 }
@@ -193,6 +194,7 @@ export function TodosTab({
   projectId,
   currentUserId,
   members,
+  admins,
   templates,
   isAdmin,
 }: TodosTabProps) {
@@ -604,6 +606,7 @@ export function TodosTab({
       </div>
 
       <DndContext
+        id="todos-board"
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
@@ -740,6 +743,7 @@ export function TodosTab({
                                   listId={list.id}
                                   projectId={projectId}
                                   members={members}
+                                  admins={admins}
                                   isAdmin={isAdmin}
                                   currentUserId={currentUserId}
                                   onToggle={handleToggleStatus}

@@ -12,8 +12,8 @@ Session memory (current state, working rules, backlog) is in @MEMORY.md
 An internal agency management portal for **Weblikha Digital Inc.** — a Webflow agency based in the Philippines.
 
 **Users:** Admin (Matthew Kim) + service providers (devs, designers, SEO specialists). A `client` role exists in the schema but client-facing features are not built yet.
-**In scope now:** Dashboard, Projects (with phases/task-lists, todos, comments, messages, members), Team performance & leaderboard, Revenue, Rewards, Settings (approval queue + project templates), in-app notifications.
-**Not yet in scope:** Client-facing views, Moxie integration, time tracking, PWA push.
+**In scope now:** Dashboard, Projects (with phases/task-lists, todos, comments, messages, members), Team performance & leaderboard, Revenue, Rewards, Settings (approval queue + project templates), in-app notifications, web push (push-only service worker + VAPID, opt-in via the bell).
+**Not yet in scope:** Client-facing views, Moxie integration, time tracking.
 **Direction:** Matthew is turning this into a productized service — custom apps tailored per client. Client intake forms live in `docs/client-intake-forms.md`. The original plan doc is `AGENCY_PORTAL_PLAN.md`.
 
 ---
@@ -158,6 +158,9 @@ performance_periods user_id, period_month, period_year, task_points, deadline_po
 revenue_entries     id, project_id, type (income|expense), amount, date, note
 notifications       id, user_id, actor_id, type (mention|task_assigned), project_id,
                     task_id, comment_id, read_at, created_at
+push_subscriptions  id, user_id, endpoint (unique), p256dh, auth, user_agent, timestamps
+                    (one row per browser/device; owner-only RLS — server reads use
+                    the service-role admin client in src/lib/supabase/admin.ts)
 ```
 
 ### Template tables (project scaffolding from Settings)
@@ -194,6 +197,7 @@ template_tasks          id, template_task_list_id, title, description, points_va
 009 rich-text comments, editing, mentions, attachments
 010 task ordering            011 claim unassigned tasks
 012 reorder task RPC         013 in-app notifications
+014 web push subscriptions
 ```
 
 ### Incentive point system

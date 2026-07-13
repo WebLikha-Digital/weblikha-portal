@@ -17,6 +17,8 @@ Live on Vercel with separate production Supabase project `vhsuyouczctnkvnnjzgg` 
 
 **Done 2026-07-04:** `master` renamed to `main` locally and on GitHub (duplicate branch deleted). Claude Code agents (`.claude/agents/`) committed to repo.
 
+**Done 2026-07-14:** Web push shipped to prod (PRs #1 and #2) — migration 014 (`push_subscriptions`, owner-only RLS), push-only service worker, bell opt-in row, pushes on mentions/assignments with recipients validated against project membership + admins, server-only admin client, admins mentionable in comments regardless of roster, dnd-kit hydration fix. VAPID keys in Vercel (Production) + `.env.local` (dev pair). Known follow-ups: migration-013 in-app trigger needs the same membership check; no `pushsubscriptionchange` handler; no "disable push" UI (`deletePushSubscription` action exists unused).
+
 **Business context:** Matthew is turning this into a productized service — custom apps tailored per client. Client intake forms live in `docs/client-intake-forms.md`.
 
 ---
@@ -61,11 +63,11 @@ Prefer baking these states into `@/components/ui` primitives so features inherit
 ### Next up: approval email via Resend
 When admin approves a team member in Settings, email them. Plan: call Resend API inside the `approveUser` Server Action in `src/app/(portal)/settings/actions.ts` right after the DB update. Steps: sign up at resend.com → `npm install resend` → `RESEND_API_KEY` in .env.local → ~3 lines in `approveUser`. Free tier: 3,000 emails/month.
 
-### In-app notifications
-First trigger: notify a member when @mentioned in a task comment. Groundwork done: `task_comments.mentions uuid[]` column (migration 009) stores mentioned user IDs on create/edit — no HTML parsing needed. Insert point: `createTaskComment` / `updateTaskComment` in `src/app/(portal)/projects/actions.ts`. Planned shape: `notifications` table + inserts on events (mentions, task assignment, approval), bell/dropdown UI in Topbar. Pairs with PWA service worker for push later. Client tagging planned later.
+### Notifications — shipped (in-app 2026-07-13, web push 2026-07-14)
+In-app bell (migration 013) + web push (migration 014) both live. Remaining notification follow-ups: membership check in the migration-013 trigger, `pushsubscriptionchange` handler, disable-push UI, client tagging later.
 
 ### AI features (parked until non-AI roadmap ships)
-Parked until Revenue, Rewards, Resend email, notifications, message compose, and service worker ship. Agreed favorite: **AI project scaffolding** — describe a project in a sentence at creation, Claude generates phases/tasks with due dates + point values, admin reviews before applying (reuses `applyTemplate` machinery). Runners-up: weekly per-project digest to message board; comment-thread summarizer. Needs `ANTHROPIC_API_KEY` server-side; Sonnet for scaffolding, Haiku for digests.
+Parked until Revenue, Rewards, Resend email, notifications, message compose, and service worker ship. (As of 2026-07-14 only message compose remains.) Agreed favorite: **AI project scaffolding** — describe a project in a sentence at creation, Claude generates phases/tasks with due dates + point values, admin reviews before applying (reuses `applyTemplate` machinery). Runners-up: weekly per-project digest to message board; comment-thread summarizer. Needs `ANTHROPIC_API_KEY` server-side; Sonnet for scaffolding, Haiku for digests.
 
 ---
 

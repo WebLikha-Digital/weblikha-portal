@@ -60,6 +60,11 @@ Prefer baking these states into `@/components/ui` primitives so features inherit
 
 ## Backlog / roadmap
 
+### Next up (queued 2026-07-14, from Matthew's prod testing)
+1. **Notification click should deep-link to the specific task, not just the task list.**
+   Both the bell (`openItem` in `src/components/layout/NotificationsBell.tsx` → `/projects/{project_id}?tab=todos`) and the push payload URLs (`notifyMentions` / `notifyAssignment` in `src/app/(portal)/projects/actions.ts`) stop at the list level even though notifications carry `task_id`. Plan: append `&task={task_id}`, have TodosTab read the param and scroll to + expand (open comments of) that task row. Update the mention email link too. Handle the sw.js `notificationclick` focus path (it `client.navigate(url)`s an already-open tab — the param must trigger the scroll on client-side navigation, not just initial load).
+2. **Team-member filter dropdown font size too big** — doesn't match surrounding text. Likely cause: the global mobile rule from commit `15362b0` forces 16px `!important` on inputs/selects to stop iOS focus-zoom, which also bloats the desktop dropdown that should be `text-sm`. Fix must keep ≥16px on mobile (or scope the rule) while matching `text-sm` on desktop.
+
 ### Next up: approval email via Resend
 When admin approves a team member in Settings, email them. Plan: call Resend API inside the `approveUser` Server Action in `src/app/(portal)/settings/actions.ts` right after the DB update. Steps: sign up at resend.com → `npm install resend` → `RESEND_API_KEY` in .env.local → ~3 lines in `approveUser`. Free tier: 3,000 emails/month.
 

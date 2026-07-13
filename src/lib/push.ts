@@ -24,6 +24,12 @@ export async function sendPushToUsers(userIds: string[], payload: PushPayload): 
   const targets = Array.from(new Set(userIds))
   if (targets.length === 0) return
 
+  const MAX_PUSH_TARGETS = 100
+  if (targets.length > MAX_PUSH_TARGETS) {
+    console.warn(`[push] Capping push fan-out from ${targets.length} to ${MAX_PUSH_TARGETS} recipients`)
+    targets.length = MAX_PUSH_TARGETS
+  }
+
   const publicKey  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
   const privateKey = process.env.VAPID_PRIVATE_KEY
   const subject    = process.env.VAPID_SUBJECT

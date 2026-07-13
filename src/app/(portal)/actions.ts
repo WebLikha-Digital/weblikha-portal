@@ -19,6 +19,11 @@ export async function savePushSubscription(sub: {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // endpoint is globally unique. If another account on this same browser
+  // profile previously subscribed, the conflict-update targets a row this
+  // user's RLS can't touch and the upsert errors — surfaced as the enable
+  // toast failing. Intentional: RLS stays the boundary; shared-device
+  // endpoint takeover is not supported.
   const { error } = await supabase
     .from('push_subscriptions')
     .upsert(

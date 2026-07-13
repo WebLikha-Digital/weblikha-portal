@@ -135,7 +135,7 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
 
   const badge = unread > 0 && (
     <span
-      className="absolute -top-1 -right-1.5 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-brand text-bg-base text-[10px] font-semibold leading-none"
+      className="absolute -top-1 -right-1.5 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-brand text-bg-base text-2xs font-semibold leading-none"
       aria-hidden
     >
       {unread > 9 ? '9+' : unread}
@@ -202,7 +202,7 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
             </div>
 
             {pushRow !== 'hidden' && (
-              <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-subtle bg-brand/5">
+              <div className="flex flex-wrap items-center gap-2.5 gap-y-1 px-4 py-2.5 border-b border-subtle bg-brand/5">
                 <BellRing className="size-4 shrink-0 text-brand" aria-hidden />
                 <span className="min-w-0 flex-1 text-xs text-secondary">
                   Get notified on this device
@@ -210,13 +210,13 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
                 <button
                   onClick={enablePush}
                   disabled={pushRow === 'pending'}
-                  className="rounded text-2xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:opacity-40 transition-colors"
+                  className="shrink-0 rounded px-2 py-1 text-2xs font-medium text-brand hover:underline active:opacity-70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:opacity-40 transition-colors"
                 >
                   {pushRow === 'pending' ? 'Enabling…' : 'Enable'}
                 </button>
                 <button
                   onClick={dismissPush}
-                  className="rounded text-2xs text-tertiary hover:text-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand transition-colors"
+                  className="shrink-0 rounded px-2 py-1 text-2xs text-tertiary hover:text-secondary active:opacity-70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand transition-colors"
                 >
                   Not now
                 </button>

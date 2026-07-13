@@ -421,8 +421,21 @@ async function notifyMentions(
   if (targets.length === 0) return
 
   try {
+    // Only project members and admins may be notified — the mentions array is
+    // client-supplied and must not become a cross-project notification channel.
+    const [{ data: memberRows }, { data: adminRows }] = await Promise.all([
+      supabase.from('project_members').select('user_id').eq('project_id', projectId).in('user_id', targets),
+      supabase.from('users').select('id').eq('role', 'admin').in('id', targets),
+    ])
+    const allowed = new Set([
+      ...(memberRows ?? []).map(r => r.user_id),
+      ...(adminRows ?? []).map(r => r.id),
+    ])
+    const validTargets = targets.filter(id => allowed.has(id))
+    if (validTargets.length === 0) return
+
     const [{ data: users }, { data: task }, { data: author }] = await Promise.all([
-      supabase.from('users').select('email, name').in('id', targets),
+      supabase.from('users').select('email, name').in('id', validTargets),
       supabase.from('tasks').select('title').eq('id', taskId).single(),
       supabase.from('users').select('name').eq('id', authorId).single(),
     ])
@@ -431,7 +444,7 @@ async function notifyMentions(
     const taskTitle  = task?.title ?? 'a task'
     const portalUrl  = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
 
-    await sendPushToUsers(targets, {
+    await sendPushToUsers(validTargets, {
       title: `${authorName} mentioned you`,
       body:  taskTitle,
       url:   `/projects/${projectId}?tab=todos`,

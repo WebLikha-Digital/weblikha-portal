@@ -36,12 +36,15 @@
     "react-dom": "^19.0.0",
     "recharts": "^3.0.0",
     "resend": "^6.17.1",
-    "tailwind-merge": "^2.5.4"
+    "server-only": "^0.0.1",
+    "tailwind-merge": "^2.5.4",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.5.0",
     "eslint": "^9",
     "eslint-config-next": "^15.3.0",

@@ -11,12 +11,9 @@ Live on Vercel with separate production Supabase project `vhsuyouczctnkvnnjzgg` 
 
 **Done:** All 10 migrations applied to prod via `supabase db push` (required replacing `uuid_generate_v4()` with `gen_random_uuid()` in migrations 001/002/005 — CLI search_path doesn't see the extensions schema). Google OAuth enabled on prod (reused dev's Google Cloud OAuth client, added prod callback URI). Supabase Site URL + redirect URLs set to the Vercel domain.
 
-**Still pending:**
-- Matthew bootstraps himself as admin in prod (`users.role = 'admin'` + approved)
-- RLS smoke test (provider can't see revenue)
-- Points trigger test
-- Vercel Preview env vars pointed at dev Supabase
-- Investigate failing CI check on commit `d8f6bf3`
+**Post-launch checklist — all resolved (2026-07-13):**
+- Admin bootstrap in prod, RLS smoke test, points trigger test, Vercel Preview env vars → dev Supabase: confirmed done by Matthew.
+- "Failing CI check" on `d8f6bf3` investigated: it was a Vercel "Deployment was blocked" status, caused by the commit being authored as `matthew.rufino@gmail.com` (unverified email on the `web-likha` GitHub account — the incident behind standing rule #6). All later commits use `weblikhadigital@gmail.com` and deploy fine; the old red X is historical, no action needed.
 
 **Done 2026-07-04:** `master` renamed to `main` locally and on GitHub (duplicate branch deleted). Claude Code agents (`.claude/agents/`) committed to repo.
 

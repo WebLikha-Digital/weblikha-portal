@@ -56,7 +56,17 @@ export async function sendPushToUsers(userIds: string[], payload: PushPayload): 
         const status = (err as { statusCode?: number }).statusCode
         if (status === 404 || status === 410) {
           // Browser unsubscribed — prune the dead subscription
-          await admin.from('push_subscriptions').delete().eq('id', sub.id)
+          try {
+            const { error: cleanupError } = await admin
+              .from('push_subscriptions')
+              .delete()
+              .eq('id', sub.id)
+            if (cleanupError) {
+              console.error(`[push] Failed to prune dead subscription ${sub.id}:`, cleanupError.message)
+            }
+          } catch (cleanupErr) {
+            console.error(`[push] Failed to prune dead subscription ${sub.id}:`, cleanupErr)
+          }
         } else {
           console.error('[push] Send failed:', err)
         }

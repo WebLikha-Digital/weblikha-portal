@@ -606,6 +606,7 @@ export function TodosTab({
       </div>
 
       <DndContext
+        id="todos-board"
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}

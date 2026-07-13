@@ -14,13 +14,17 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, CheckCheck, AtSign, ClipboardList } from 'lucide-react'
+import { Bell, BellRing, CheckCheck, AtSign, ClipboardList } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui'
 import { cn, formatRelative } from '@/lib/utils'
+import { toast } from '@/components/ui/toast'
+import { savePushSubscription } from '@/app/(portal)/actions'
+import { getExistingSubscription, pushSupported, subscribeToPush } from '@/lib/push-client'
 import type { NotificationWithMeta } from '@/types'
 
 const POLL_MS = 30_000
+const PUSH_DISMISSED_KEY = 'weblikha-push-dismissed'
 
 interface NotificationsBellProps {
   variant:    'sidebar' | 'header'
@@ -35,6 +39,7 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
   const [items,   setItems]   = useState<NotificationWithMeta[]>([])
   const [unread,  setUnread]  = useState(0)
   const [marking, setMarking] = useState(false)
+  const [pushRow, setPushRow] = useState<'hidden' | 'available' | 'pending'>('hidden')
 
   const load = useCallback(async () => {
     const supabase = supabaseRef.current
@@ -64,6 +69,18 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
     }
   }, [load])
 
+  // Offer push opt-in when supported, not yet subscribed, and not dismissed.
+  useEffect(() => {
+    void (async () => {
+      if (!pushSupported()) return
+      if (Notification.permission === 'denied') return
+      if (localStorage.getItem(PUSH_DISMISSED_KEY)) return
+      const existing = await getExistingSubscription()
+      if (existing) return
+      setPushRow('available')
+    })()
+  }, [])
+
   async function openItem(n: NotificationWithMeta) {
     setOpen(false)
     if (!n.read_at) {
@@ -89,6 +106,31 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
       .update({ read_at: now })
       .is('read_at', null)
     setMarking(false)
+  }
+
+  async function enablePush() {
+    if (pushRow === 'pending') return
+    setPushRow('pending')
+    try {
+      const sub = await subscribeToPush()
+      if (!sub) {
+        // Permission dismissed or denied — hide permanently only when denied
+        setPushRow(Notification.permission === 'denied' ? 'hidden' : 'available')
+        return
+      }
+      await savePushSubscription({ ...sub, userAgent: navigator.userAgent })
+      setPushRow('hidden')
+      toast.success('Push notifications enabled on this device')
+    } catch (err) {
+      console.error('[push] Enable failed:', err)
+      setPushRow('available')
+      toast.error('Could not enable push notifications')
+    }
+  }
+
+  function dismissPush() {
+    localStorage.setItem(PUSH_DISMISSED_KEY, '1')
+    setPushRow('hidden')
   }
 
   const badge = unread > 0 && (
@@ -158,6 +200,28 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
                 Mark all read
               </button>
             </div>
+
+            {pushRow !== 'hidden' && (
+              <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-subtle bg-brand/5">
+                <BellRing className="size-4 shrink-0 text-brand" aria-hidden />
+                <span className="min-w-0 flex-1 text-xs text-secondary">
+                  Get notified on this device
+                </span>
+                <button
+                  onClick={enablePush}
+                  disabled={pushRow === 'pending'}
+                  className="rounded text-2xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:opacity-40 transition-colors"
+                >
+                  {pushRow === 'pending' ? 'Enabling…' : 'Enable'}
+                </button>
+                <button
+                  onClick={dismissPush}
+                  className="rounded text-2xs text-tertiary hover:text-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand transition-colors"
+                >
+                  Not now
+                </button>
+              </div>
+            )}
 
             <div className="max-h-96 overflow-y-auto">
               {items.length === 0 && (

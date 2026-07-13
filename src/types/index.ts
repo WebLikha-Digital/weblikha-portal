@@ -279,3 +279,17 @@ export interface NotificationWithMeta extends AppNotification {
   actor: Pick<User, 'id' | 'name' | 'avatar_url'> | null
   task:  { id: string; title: string } | null
 }
+
+// ── Push subscriptions ─────────────────────────────────────────────────────────
+
+/** push_subscriptions table row (Web Push endpoint + keys per browser/device) */
+export interface PushSubscriptionRow {
+  id:         string
+  user_id:    string
+  endpoint:   string
+  p256dh:     string
+  auth:       string
+  user_agent: string | null
+  created_at: string
+  updated_at: string
+}

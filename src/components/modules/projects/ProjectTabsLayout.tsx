@@ -34,6 +34,7 @@ interface ProjectTabsLayoutProps {
   taskLists:        TaskListWithTasks[]
   messages:         MessageWithAuthor[]
   members:          ProjectDetail['members']
+  admins:           User[]
   availableMembers: User[]
   templates:        ProjectTemplate[]
   isAdmin:          boolean
@@ -45,6 +46,7 @@ export function ProjectTabsLayout({
   taskLists,
   messages,
   members,
+  admins,
   availableMembers,
   templates,
   isAdmin,
@@ -78,6 +80,7 @@ export function ProjectTabsLayout({
           projectId={projectId}
           currentUserId={currentUserId}
           members={members}
+          admins={admins}
           templates={templates}
           isAdmin={isAdmin}
         />

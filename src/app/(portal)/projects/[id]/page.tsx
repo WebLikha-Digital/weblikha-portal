@@ -52,6 +52,13 @@ export default async function ProjectDetailPage({ params }: Props) {
     .eq('role', 'provider').eq('approved', true)
     .order('name', { ascending: true })
 
+  // Admins are mentionable in every project even when not on the roster —
+  // matches the recipient boundary notifyMentions enforces server-side
+  const { data: adminUsers } = await supabase
+    .from('users').select('*')
+    .eq('role', 'admin').eq('approved', true)
+    .order('name', { ascending: true })
+
   // Task lists + tasks + assignees + comment threads
   const { data: taskListsRaw } = await supabase
     .from('task_lists')
@@ -121,6 +128,7 @@ export default async function ProjectDetailPage({ params }: Props) {
         taskLists={taskLists}
         messages={messages}
         members={members}
+        admins={(adminUsers ?? []) as User[]}
         availableMembers={availableMembers}
         templates={templates}
         isAdmin={isAdmin}

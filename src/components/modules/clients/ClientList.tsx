@@ -40,7 +40,7 @@ export function ClientList({ rows, allProjects }: ClientListProps) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [managing, setManaging] = useState<ClientRow | null>(null)
 
-  // Only `status` moves optimistically. Project chips are handled in Task 3.
+  // Only `status` moves optimistically; project chips refresh via revalidatePath.
   const [optimisticRows, patchStatus] = useOptimistic(
     rows,
     (state: ClientRow[], patch: { id: string; status: ClientSetupStatus }) =>
@@ -107,7 +107,8 @@ export function ClientList({ rows, allProjects }: ClientListProps) {
       <div className="card px-6 py-12 flex flex-col items-center text-center gap-2">
         <p className="text-sm font-medium text-primary">No clients yet</p>
         <p className="text-sm text-secondary max-w-xs">
-          Invite a client to give them access to the projects you assign them.
+          Invite a client with the button above to give them access to the
+          projects you assign them.
         </p>
       </div>
     )

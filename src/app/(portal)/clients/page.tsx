@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ClientList } from '@/components/modules/clients/ClientList'
+import { InviteClientModal } from '@/components/modules/clients/InviteClientModal'
 import { fetchClientSetupState } from './setup-state'
 import type { ClientRow, ClientSetupStatus, PickerProject, User } from '@/types'
 
@@ -75,6 +76,7 @@ export default async function ClientsPage() {
             Invite clients, assign them projects, and manage portal access.
           </p>
         </div>
+        <InviteClientModal allProjects={allProjects} />
       </div>
 
       <ClientList rows={rows} allProjects={allProjects} />

@@ -94,6 +94,7 @@ export function ProjectTabsLayout({
           members={members}
           availableMembers={availableMembers}
           isAdmin={isAdmin}
+          viewerRole={viewerRole}
         />
       )}
     </>

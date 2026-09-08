@@ -296,6 +296,7 @@ export function TodosTab({
     if (!taskTitle.trim() || !taskDueDate || isPending) return
     const assignee = members.find(m => m.user_id === taskAssigneeId)?.user ?? null
     const listLength = optimisticLists.find(l => l.id === taskListId)?.tasks.length ?? 0
+    const self = members.find(m => m.user_id === currentUserId)?.user ?? null
     const optimisticTask: TaskWithMeta = {
       id:           `temp-${Date.now()}`,
       project_id:   projectId,
@@ -308,10 +309,12 @@ export function TodosTab({
       completed_at: null,
       points_value: 60,
       position:     listLength,
+      created_by:   currentUserId,
       created_at:   new Date().toISOString(),
       updated_at:   new Date().toISOString(),
       assignee,
       comments:     [],
+      creator:      self ? { id: self.id, name: self.name, role: self.role } : null,
     }
     const fd = new FormData()
     fd.set('project_id',   projectId)
@@ -374,12 +377,16 @@ export function TodosTab({
 
   function handleAddPhase() {
     if (!phaseName.trim() || isPending) return
+    const self = members.find(m => m.user_id === currentUserId)?.user ?? null
     const optimisticList: TaskListWithTasks = {
       id:         `temp-${Date.now()}`,
       project_id: projectId,
       name:       phaseName.trim(),
       position:   optimisticLists.length,
+      created_by: currentUserId,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      creator:    self ? { id: self.id, name: self.name, role: self.role } : null,
       tasks:      [],
     }
     const name = phaseName.trim()

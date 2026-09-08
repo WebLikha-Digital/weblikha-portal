@@ -6,6 +6,9 @@
  * takes over). Role-aware, mirrors the sidebar's primary nav. Secondary items
  * (user profile, sign out) stay in the hamburger drawer.
  *
+ * Clients get Dashboard + Projects only — same restriction as the sidebar's
+ * CLIENT_NAV, and for the same reason (no team-internal pages).
+ *
  * Respects the home-indicator safe area on installed PWAs / iOS.
  * ─────────────────────────────────────────────────────────────────────────────
  */
@@ -17,6 +20,8 @@ import {
 import { cn } from '@/lib/utils'
 import type { User } from '@/types'
 
+// ADMIN_TABS deliberately does NOT include Clients (5 items is already the
+// most this bar comfortably fits) — leave that as is.
 const ADMIN_TABS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Projects',  href: '/projects',  icon: Folder },
@@ -31,16 +36,51 @@ const PROVIDER_TABS = [
   { label: 'Rewards',   href: '/rewards',   icon: Trophy },
 ] as const
 
+const CLIENT_TABS = [
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Projects',  href: '/projects',  icon: Folder },
+] as const
+
+// The three tab arrays above are differently-shaped readonly tuples
+// (`as const`); a common element type lets the three-way selection below
+// typecheck without widening to a cast or `any`.
+type TabItem = { label: string; href: string; icon: typeof LayoutDashboard }
+
 export function MobileTabBar({ user }: { user: User }) {
   const pathname = usePathname()
-  const tabs = user.role === 'admin' ? ADMIN_TABS : PROVIDER_TABS
+
+  // Explicit three-way selection, mirroring sidebar.tsx. An unrecognized
+  // role falls to CLIENT_TABS — the most restrictive set — never PROVIDER_TABS.
+  let tabs: readonly TabItem[]
+  switch (user.role) {
+    case 'admin':
+      tabs = ADMIN_TABS
+      break
+    case 'provider':
+      tabs = PROVIDER_TABS
+      break
+    case 'client':
+      tabs = CLIENT_TABS
+      break
+    default:
+      tabs = CLIENT_TABS
+  }
+
+  // Two items in a bar built for five would otherwise stretch each tab to
+  // half the screen width and look unfinished. Cap the row at a standard
+  // Tailwind max-width and center it on client accounts instead of letting
+  // flex-1 stretch two tabs edge to edge.
+  const isSparse = tabs.length <= 2
 
   return (
     <nav
       className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-bg-surface-1 border-t border-subtle pb-[env(safe-area-inset-bottom)]"
       aria-label="Primary"
     >
-      <ul className="flex" role="list">
+      <ul
+        className={cn('flex', isSparse && 'max-w-xs mx-auto')}
+        role="list"
+      >
         {tabs.map(({ label, href, icon: Icon }) => {
           const isActive = pathname === href || pathname.startsWith(`${href}/`)
           return (

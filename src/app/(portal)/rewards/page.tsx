@@ -10,6 +10,12 @@ export default async function RewardsPage() {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
+  // Rewards surfaces the internal team's incentive points — clients must
+  // never reach it, even by typing the URL directly.
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', authUser.id).single()
+  if (profile?.role !== 'admin' && profile?.role !== 'provider') redirect('/dashboard')
+
   return (
     <div className="p-4 sm:p-6 max-w-2xl">
       <div className="mb-6">

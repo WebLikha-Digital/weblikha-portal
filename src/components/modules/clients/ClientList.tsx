@@ -8,7 +8,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { useOptimistic, useState, useTransition } from 'react'
-import { Mail, Ban, RotateCcw } from 'lucide-react'
+import { Mail, Ban, RotateCcw, FolderCog } from 'lucide-react'
 import { Avatar, Badge, Button } from '@/components/ui'
 import type { BadgeProps } from '@/components/ui'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
@@ -18,6 +18,7 @@ import {
   revokeClientAccess,
   restoreClientAccess,
 } from '@/app/(portal)/clients/actions'
+import { ManageProjectsModal } from './ManageProjectsModal'
 import type { ClientRow, ClientSetupStatus, PickerProject } from '@/types'
 
 interface ClientListProps {
@@ -34,9 +35,10 @@ const STATUS_META: Record<
   revoked:        { label: 'Revoked',        variant: 'danger'  },
 }
 
-export function ClientList({ rows, allProjects: _allProjects }: ClientListProps) {
+export function ClientList({ rows, allProjects }: ClientListProps) {
   const [, startTransition] = useTransition()
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [managing, setManaging] = useState<ClientRow | null>(null)
 
   // Only `status` moves optimistically. Project chips are handled in Task 3.
   const [optimisticRows, patchStatus] = useOptimistic(
@@ -144,6 +146,14 @@ export function ClientList({ rows, allProjects: _allProjects }: ClientListProps)
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<FolderCog className="size-3.5" />}
+                onClick={() => setManaging({ user, projects, status })}
+              >
+                Manage projects
+              </Button>
               {status === 'invite_pending' && (
                 <Button
                   size="sm"
@@ -181,6 +191,14 @@ export function ClientList({ rows, allProjects: _allProjects }: ClientListProps)
           </div>
         )
       })}
+
+      {managing && (
+        <ManageProjectsModal
+          row={managing}
+          allProjects={allProjects}
+          onClose={() => setManaging(null)}
+        />
+      )}
     </div>
   )
 }

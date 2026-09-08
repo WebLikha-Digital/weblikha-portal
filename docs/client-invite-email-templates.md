@@ -38,6 +38,12 @@ Supabase Dashboard → your project → **Authentication → Emails → Template
 
 Edit the **Message body** field only. Leave the subject lines however you like them.
 
+**Do not touch Magic Link or Confirm signup.** Only the two templates below need editing.
+Magic Link and Confirm signup must keep their default `{{ .ConfirmationURL }}` bodies — those
+flows are PKCE-initiated by the user's own browser and already redeem correctly through
+`/auth/callback?code=`. Converting them to `{{ .TokenHash }}` would look like a consistency
+cleanup but would break two working flows.
+
 ### 1. Template: **Invite user**
 
 ```html
@@ -86,10 +92,14 @@ ignore this email — your current password still works.</p>
 These are pasted by hand and a wrong value fails **silently**, so check each one:
 
 - **`type` must match the template.** `type=invite` on Invite user, `type=recovery` on
-  Reset password. A mismatched `type` makes GoTrue's `/verify` reject the hash, the user
-  lands on `/login?error=invite_expired`, and the token is consumed — indistinguishable
-  from a genuinely expired link. `/auth/confirm` only accepts
-  `invite | recovery | magiclink | email`; anything else is rejected before the call.
+  Reset password. A mismatched `type` makes GoTrue's `/verify` reject the hash and the user
+  lands on `/login?error=invite_expired` — a confusing "expired link" error, but very likely
+  *not* a consumed token: GoTrue looks the hash up against the type-specific column
+  (`confirmation_token` vs `recovery_token`), so a mismatch matches no row and consumes
+  nothing. (Moderate rather than high confidence on GoTrue's exact internals here.) So if the
+  first invite fails this way, fix the template and re-click the *same* link before burning a
+  fresh invite. `/auth/confirm` only accepts `invite | recovery | magiclink | email`; anything
+  else is rejected before the call.
 - **`{{ .TokenHash }}`** — capital T, capital H, spaces inside the braces. Not
   `{{ .Token }}` (that's the 6-digit OTP) and not `{{ .ConfirmationURL }}`.
 - **`next=/set-password`** — leading slash, no origin. `/auth/confirm` rejects anything
@@ -169,8 +179,12 @@ Do this on **dev** first, with a real inbox you control that is *not* the admin 
 2. **Send an invite.** `/clients` → Invite client, with a real address. It should appear in
    the list as **Invite pending**.
 3. **Inspect the email before clicking.** The link must look like
-   `http://localhost:3000/auth/confirm?token_hash=pkce_…&type=invite&next=/set-password`.
-   If you see `.../auth/v1/verify?token=…` instead, the template did not save — the default
+   `http://localhost:3000/auth/confirm?token_hash=b1c9f2…&type=invite&next=/set-password` —
+   a **bare** hash, no `pkce_` prefix. Neither send path issues a `code_challenge` any more
+   (`inviteUserByEmail` is an admin API call, and the resend path runs on the implicit-flow
+   admin client), so a `pkce_`-prefixed hash is not the success case — it's a red flag that
+   the resend path has regressed to a cookie-bound server client. If you see
+   `.../auth/v1/verify?token=…` instead, the template did not save — the default
    `{{ .ConfirmationURL }}` is still in there. Stop and fix that.
 4. **Open it in a different browser or a private window** — one with no Supabase session at
    all. This is the whole point of the fix: it must be redeemable by someone who is not the

@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Answers "has this client ever signed in?" — the signal that separates an
  * invite nobody clicked from a live account. `last_sign_in_at` becomes non-null
- * the moment the invite link is exchanged at /auth/callback.
+ * the moment the invite link is exchanged at /auth/confirm.
  *
  * WHY THIS IS NOT IN actions.ts: every export in a 'use server' file becomes a
  * callable RPC endpoint. This helper is not something the browser should be

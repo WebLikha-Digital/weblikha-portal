@@ -173,7 +173,7 @@ export function ClientList({ rows, allProjects }: ClientListProps) {
                   onClick={() => handleResend({ user, projects, status })}
                   {...(status === 'active' ? { className: 'text-tertiary' } : {})}
                 >
-                  Resend
+                  {status === 'active' ? 'Send reset link' : 'Resend'}
                 </Button>
               )}
               {status === 'revoked' ? (

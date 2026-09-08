@@ -9,7 +9,7 @@
  * so a mistyped address can be corrected without retyping the whole form.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { useEffect, useState, useTransition } from 'react'
+import { useCallback, useEffect, useState, useTransition } from 'react'
 import { X, UserPlus } from 'lucide-react'
 import { Button, Input } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
@@ -23,20 +23,20 @@ export function InviteClientModal({ allProjects }: { allProjects: PickerProject[
   const [error, setError]          = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  useEffect(() => {
-    if (!open) return
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open])
-
-  function close() {
+  const close = useCallback(() => {
     setOpen(false)
     setError(null)
     setSelected(new Set())
-  }
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !isPending) close()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, isPending, close])
 
   function toggle(id: string) {
     setSelected(prev => {
@@ -75,7 +75,11 @@ export function InviteClientModal({ allProjects }: { allProjects: PickerProject[
 
       {open && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/50" onClick={close} aria-hidden />
+          <div
+            className="fixed inset-0 z-40 bg-black/50"
+            onClick={() => { if (!isPending) close() }}
+            aria-hidden
+          />
           <div
             role="dialog"
             aria-modal="true"
@@ -85,8 +89,9 @@ export function InviteClientModal({ allProjects }: { allProjects: PickerProject[
             <div className="flex items-center justify-between px-6 py-4 border-b border-subtle">
               <h2 className="text-base font-semibold text-primary">Invite client</h2>
               <button
-                onClick={close}
-                className="text-secondary hover:text-primary transition-colors rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                onClick={() => { if (!isPending) close() }}
+                disabled={isPending}
+                className="text-secondary hover:text-primary transition-colors rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label="Close"
               >
                 <X className="size-5" />

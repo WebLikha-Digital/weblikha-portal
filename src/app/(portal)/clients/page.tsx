@@ -20,14 +20,15 @@ function deriveStatus(
 export default async function ClientsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('role').eq('id', user!.id).single()
+    .from('users').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
   const { data: clientsRaw } = await supabase
     .from('users')
-    .select('*')
+    .select('id, email, name, role, specialty, skills, employment_type, avatar_url, approved, created_at, updated_at')
     .eq('role', 'client')
     .order('name', { ascending: true })
 

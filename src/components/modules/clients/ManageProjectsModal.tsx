@@ -29,11 +29,11 @@ export function ManageProjectsModal({ row, allProjects, onClose }: ManageProject
   // Escape closes, matching the confirm dialog's behaviour.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !isPending) onClose()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, isPending])
 
   function toggle(id: string) {
     setSelected(prev => {
@@ -61,7 +61,7 @@ export function ManageProjectsModal({ row, allProjects, onClose }: ManageProject
     <>
       <div
         className="fixed inset-0 z-40 bg-black/50"
-        onClick={onClose}
+        onClick={() => { if (!isPending) onClose() }}
         aria-hidden
       />
       <div
@@ -76,8 +76,9 @@ export function ManageProjectsModal({ row, allProjects, onClose }: ManageProject
             <p className="text-2xs text-secondary truncate">{row.user.name}</p>
           </div>
           <button
-            onClick={onClose}
-            className="text-secondary hover:text-primary transition-colors rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            onClick={() => { if (!isPending) onClose() }}
+            disabled={isPending}
+            className="text-secondary hover:text-primary transition-colors rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Close"
           >
             <X className="size-5" />
@@ -89,6 +90,7 @@ export function ManageProjectsModal({ row, allProjects, onClose }: ManageProject
             projects={allProjects}
             selectedIds={selectedIds}
             onToggle={toggle}
+            disabled={isPending}
           />
           <p className="text-2xs text-secondary mt-2">
             {selectedIds.size} project{selectedIds.size === 1 ? '' : 's'} selected

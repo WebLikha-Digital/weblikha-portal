@@ -18,9 +18,10 @@ interface ProjectPickerProps {
   projects:    PickerProject[]
   selectedIds: Set<string>
   onToggle:    (id: string) => void
+  disabled?:   boolean
 }
 
-export function ProjectPicker({ projects, selectedIds, onToggle }: ProjectPickerProps) {
+export function ProjectPicker({ projects, selectedIds, onToggle, disabled = false }: ProjectPickerProps) {
   const visible = projects.filter(
     p => p.status !== 'archived' || selectedIds.has(p.id),
   )
@@ -48,10 +49,12 @@ export function ProjectPicker({ projects, selectedIds, onToggle }: ProjectPicker
             role="checkbox"
             aria-checked={selected}
             onClick={() => onToggle(project.id)}
+            disabled={disabled}
             className={cn(
               'w-full flex items-center gap-3 px-3 py-2 rounded-md text-left',
               'transition-colors duration-150 active:scale-[0.99]',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
               selected ? 'bg-brand/10' : 'hover:bg-bg-surface-3',
             )}
           >

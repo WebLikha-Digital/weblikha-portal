@@ -137,6 +137,7 @@ export function InviteClientModal({ allProjects }: { allProjects: PickerProject[
                   projects={allProjects}
                   selectedIds={selectedIds}
                   onToggle={toggle}
+                  disabled={isPending}
                 />
               </div>
             </form>

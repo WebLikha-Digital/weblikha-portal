@@ -49,6 +49,13 @@ export interface Project {
   updated_at:  string
 }
 
+/**
+ * Budget-free projection of `projects`, backed by the `client_projects` view
+ * (migration 014). Client-facing screens read this instead of Project so the
+ * budget column is never fetched. RLS still applies via security_invoker.
+ */
+export type ClientProject = Omit<Project, 'budget' | 'created_by' | 'updated_at'>
+
 export interface ProjectMember {
   id:               string
   project_id:       string
@@ -62,7 +69,9 @@ export interface TaskList {
   project_id: string
   name:       string
   position:   number
+  created_by: string | null   // Null for phases predating migration 014
   created_at: string
+  updated_at: string
 }
 
 export interface Task {
@@ -75,8 +84,9 @@ export interface Task {
   status:       TaskStatus
   due_date:     string
   completed_at: string | null
-  points_value: number        // Default 60 (task completion points)
+  points_value: number        // Default 60; client-filed tasks are 0 until triaged
   position:     number        // Sort order within the task list
+  created_by:   string | null // Null for tasks predating migration 014
   created_at:   string
   updated_at:   string
 }
@@ -143,11 +153,15 @@ export interface TaskCommentWithAuthor extends TaskComment {
 export type TaskWithMeta = Task & {
   assignee: User | null
   comments: TaskCommentWithAuthor[]
+  /** Joined creator — role drives the "Added by client" badge */
+  creator:  Pick<User, 'id' | 'name' | 'role'> | null
 }
 
 /** Task list with its tasks, assignee, and comment data */
 export interface TaskListWithTasks extends TaskList {
   tasks: TaskWithMeta[]
+  /** Joined creator — role drives the "Added by client" badge */
+  creator: Pick<User, 'id' | 'name' | 'role'> | null
 }
 
 /** Message with its author user data */
@@ -259,7 +273,11 @@ export interface AdminPointsPayload {
 
 // ── Notifications ──────────────────────────────────────────────────────────────────
 
-export type NotificationType = 'mention' | 'task_assigned'
+export type NotificationType =
+  | 'mention'
+  | 'task_assigned'
+  | 'client_task'
+  | 'client_message'
 
 /** notifications table row (named to avoid clashing with the DOM Notification type) */
 export interface AppNotification {

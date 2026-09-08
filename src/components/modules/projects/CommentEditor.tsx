@@ -4,7 +4,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Features:
  *   • Bold / italic / strikethrough / lists / links toolbar
- *   • @mentions — only members of the current project (clients later)
+ *   • @mentions — members of the current project + admins (clients later)
  *   • Images: paste a screenshot, drag-drop, or attach — uploaded to the
  *     Supabase `comment-attachments` bucket, rendered inline while composing
  *
@@ -120,9 +120,15 @@ const MentionList = forwardRef<MentionListHandle, SuggestionProps<MentionItem>>(
   }
 )
 
-/** Builds the Tiptap suggestion config for @mentions (project members only). */
-function buildMentionSuggestion(members: (ProjectMember & { user: User })[]) {
+/** Builds the Tiptap suggestion config for @mentions (project members + admins). */
+function buildMentionSuggestion(members: (ProjectMember & { user: User })[], admins: User[]) {
   const items = members.map(m => ({ id: m.user_id, label: m.user.name }))
+  // Admins oversee every project and are always mentionable, roster or not —
+  // same recipient boundary notifyMentions enforces server-side
+  for (const a of admins) {
+    if (!items.some(i => i.id === a.id)) items.push({ id: a.id, label: a.name })
+  }
+  items.sort((a, b) => a.label.localeCompare(b.label))
 
   return {
     items: ({ query }: { query: string }) =>
@@ -249,6 +255,7 @@ function Toolbar({ editor, onAttach, uploading }: ToolbarProps) {
 interface CommentEditorProps {
   taskId:          string
   members:         (ProjectMember & { user: User })[]
+  admins:          User[]
   onSubmit:        (html: string, mentions: string[]) => void
   onCancel?:       () => void
   initialContent?: string
@@ -259,6 +266,7 @@ interface CommentEditorProps {
 export function CommentEditor({
   taskId,
   members,
+  admins,
   onSubmit,
   onCancel,
   initialContent,
@@ -281,7 +289,7 @@ export function CommentEditor({
       Image,
       Mention.configure({
         HTMLAttributes: { class: 'mention' },
-        suggestion: buildMentionSuggestion(members),
+        suggestion: buildMentionSuggestion(members, admins),
       }),
     ],
     content: initialContent ?? '',

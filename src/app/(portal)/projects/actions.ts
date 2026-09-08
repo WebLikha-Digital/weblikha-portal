@@ -6,6 +6,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { Resend } from 'resend'
+import { sendPushToUsers } from '@/lib/push'
 import { createClient } from '@/lib/supabase/server'
 import type { TaskStatus } from '@/types'
 
@@ -256,6 +257,11 @@ export async function createTask(formData: FormData) {
     created_by:   user.id,
   })
   if (error) throw new Error(error.message)
+
+  if (assigneeId) {
+    await notifyAssignment(supabase, assigneeId, user.id, title, projectId)
+  }
+
   revalidatePath(`/projects/${projectId}`)
 }
 
@@ -293,7 +299,7 @@ export async function updateTask(
   const isClient = profile?.role === 'client'
 
   const { data: task } = await supabase
-    .from('tasks').select('assignee_id, created_by, status').eq('id', taskId).single()
+    .from('tasks').select('assignee_id, created_by, status, title').eq('id', taskId).single()
   if (!task) throw new Error('Task not found.')
 
   const isAssignee = task.assignee_id === user.id
@@ -335,6 +341,21 @@ export async function updateTask(
   const { error } = await supabase
     .from('tasks').update(updates).eq('id', taskId)
   if (error) throw new Error(error.message)
+
+  // Push the new assignee when the task changed hands
+  if (
+    fields.assignee_id !== undefined &&
+    fields.assignee_id !== null &&
+    fields.assignee_id !== task.assignee_id
+  ) {
+    await notifyAssignment(
+      supabase,
+      fields.assignee_id,
+      user.id,
+      fields.title?.trim() || task.title,
+      projectId,
+    )
+  }
 
   revalidatePath(`/projects/${projectId}`)
   revalidatePath('/dashboard')
@@ -440,11 +461,11 @@ export async function deleteTask(taskId: string, projectId: string) {
 // side of mentions is handled here since it needs Resend.
 
 /**
- * Email newly @mentioned users. Best-effort: the comment already saved, so
- * email failures are logged, never thrown. In-app notifications are handled
- * separately by the notify_comment_mentions trigger.
+ * Email + push newly @mentioned users. Best-effort: the comment already saved,
+ * so notification failures are logged, never thrown. In-app notifications are
+ * handled separately by the notify_comment_mentions trigger (migration 013).
  */
-async function sendMentionEmails(
+async function notifyMentions(
   supabase: Awaited<ReturnType<typeof createClient>>,
   mentionIds: string[],
   authorId: string,
@@ -454,25 +475,44 @@ async function sendMentionEmails(
   const targets = Array.from(new Set(mentionIds)).filter(id => id !== authorId)
   if (targets.length === 0) return
 
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    console.warn('[mentions] RESEND_API_KEY not set — skipping mention emails')
-    return
-  }
-
   try {
+    // Only project members and admins may be notified — the mentions array is
+    // client-supplied and must not become a cross-project notification channel.
+    const [{ data: memberRows }, { data: adminRows }] = await Promise.all([
+      supabase.from('project_members').select('user_id').eq('project_id', projectId).in('user_id', targets),
+      supabase.from('users').select('id').eq('role', 'admin').in('id', targets),
+    ])
+    const allowed = new Set([
+      ...(memberRows ?? []).map(r => r.user_id),
+      ...(adminRows ?? []).map(r => r.id),
+    ])
+    const validTargets = targets.filter(id => allowed.has(id))
+    if (validTargets.length === 0) return
+
     const [{ data: users }, { data: task }, { data: author }] = await Promise.all([
-      supabase.from('users').select('email, name').in('id', targets),
+      supabase.from('users').select('email, name').in('id', validTargets),
       supabase.from('tasks').select('title').eq('id', taskId).single(),
       supabase.from('users').select('name').eq('id', authorId).single(),
     ])
-    if (!users || users.length === 0) return
 
-    const resend     = new Resend(apiKey)
-    const portalUrl  = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
     const authorName = author?.name ?? 'A teammate'
     const taskTitle  = task?.title ?? 'a task'
+    const portalUrl  = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
 
+    await sendPushToUsers(validTargets, {
+      title: `${authorName} mentioned you`,
+      body:  taskTitle,
+      url:   `/projects/${projectId}?tab=todos`,
+    })
+
+    const apiKey = process.env.RESEND_API_KEY
+    if (!apiKey) {
+      console.warn('[mentions] RESEND_API_KEY not set — skipping mention emails')
+      return
+    }
+    if (!users || users.length === 0) return
+
+    const resend = new Resend(apiKey)
     const results = await Promise.all(users.map(u =>
       resend.emails.send({
         from: process.env.RESEND_FROM ?? 'Weblikha Portal <onboarding@resend.dev>',
@@ -497,7 +537,29 @@ async function sendMentionEmails(
       if (r.error) console.error('[mentions] Resend error:', r.error.message)
     }
   } catch (err) {
-    console.error('[mentions] Failed to send mention emails:', err)
+    console.error('[mentions] Failed to notify mentioned users:', err)
+  }
+}
+
+/** Push the new assignee (never the actor). Best-effort, mirrors notifyMentions. */
+async function notifyAssignment(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  assigneeId: string,
+  actorId: string,
+  taskTitle: string,
+  projectId: string,
+) {
+  if (assigneeId === actorId) return
+  try {
+    const { data: actor } = await supabase
+      .from('users').select('name').eq('id', actorId).single()
+    await sendPushToUsers([assigneeId], {
+      title: 'New task assigned',
+      body:  `${actor?.name ?? 'A teammate'} assigned you "${taskTitle}"`,
+      url:   `/projects/${projectId}?tab=todos`,
+    })
+  } catch (err) {
+    console.error('[push] Failed to notify assignee:', err)
   }
 }
 
@@ -520,7 +582,7 @@ export async function createTaskComment(
     .insert({ task_id: taskId, author_id: user.id, body: trimmed, mentions })
   if (error) throw new Error(error.message)
 
-  await sendMentionEmails(supabase, mentions, user.id, taskId, projectId)
+  await notifyMentions(supabase, mentions, user.id, taskId, projectId)
 
   revalidatePath(`/projects/${projectId}`)
 }
@@ -556,7 +618,7 @@ export async function updateTaskComment(
   if (existing) {
     const previous    = existing.mentions ?? []
     const newMentions = mentions.filter(m => !previous.includes(m))
-    await sendMentionEmails(supabase, newMentions, user.id, existing.task_id, projectId)
+    await notifyMentions(supabase, newMentions, user.id, existing.task_id, projectId)
   }
 
   revalidatePath(`/projects/${projectId}`)

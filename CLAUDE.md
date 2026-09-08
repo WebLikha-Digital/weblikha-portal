@@ -14,8 +14,8 @@ An internal agency management portal for **Weblikha Digital Inc.** — a Webflow
 **Users:** Admin (Matthew Kim), service providers (devs, designers, SEO specialists), and
 invited **clients**. The client portal is mid-build — see "Client portal" below and @MEMORY.md
 for exactly which stages are done.
-**In scope now:** Dashboard, Projects (with phases/task-lists, todos, comments, messages, members), Team performance & leaderboard, Revenue, Rewards, Settings (approval queue + project templates), in-app notifications, client portal.
-**Not yet in scope:** Moxie integration, time tracking, PWA push.
+**In scope now:** Dashboard, Projects (with phases/task-lists, todos, comments, messages, members), Team performance & leaderboard, Revenue, Rewards, Settings (approval queue + project templates), in-app notifications, web push (push-only service worker + VAPID, opt-in via the bell), client portal.
+**Not yet in scope:** Moxie integration, time tracking.
 **Direction:** Matthew is turning this into a productized service — custom apps tailored per client. Client intake forms live in `docs/client-intake-forms.md`. The original plan doc is `AGENCY_PORTAL_PLAN.md`.
 
 ---
@@ -170,6 +170,9 @@ performance_periods user_id, period_month, period_year, task_points, deadline_po
 revenue_entries     id, project_id, type (income|expense), amount, date, note
 notifications       id, user_id, actor_id, type (mention|task_assigned|client_task|
                     client_message), project_id, task_id, comment_id, read_at, created_at
+push_subscriptions  id, user_id, endpoint (unique), p256dh, auth, user_agent, timestamps
+                    (one row per browser/device; owner-only RLS — server reads use
+                    the service-role admin client in src/lib/supabase/admin.ts)
 
 client_projects     VIEW over projects WITHOUT budget/created_by/updated_at.
                     security_invoker, so caller RLS still applies. Client-facing
@@ -217,7 +220,21 @@ template_tasks          id, template_task_list_id, title, description, points_va
 009 rich-text comments, editing, mentions, attachments
 010 task ordering            011 claim unassigned tasks
 012 reorder task RPC         013 in-app notifications
-014 client collaboration (created_by, client RLS, points fix, client_projects view)
+014 web push subscriptions          014 client collaboration (created_by, client
+                                        RLS, points fix, client_projects view)
+015 client privilege fixes          016 privilege hardening (admin self-promotion)
+017 read scope fixes                018 client delete + definer hardening
+```
+
+**⚠️ TWO MIGRATIONS ARE NUMBERED 014.** `014_push_subscriptions.sql` and
+`014_client_collaboration.sql` were written on branches that did not see each other.
+`supabase db push` orders by filename, so this is ambiguous and must be resolved before
+the CLI is used again. Renumbering is not free: 014 (client collaboration), 015 and 016
+were applied **by hand** to dev and prod under these names, so a rename moves the repo
+without moving either database. Decide deliberately, then record what each environment
+actually has.
+
+```
 ```
 
 ### Incentive point system

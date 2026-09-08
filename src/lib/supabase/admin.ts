@@ -1,16 +1,27 @@
 /**
- * SUPABASE ADMIN CLIENT (SERVICE ROLE)
+ * SUPABASE ADMIN CLIENT (SERVICE ROLE) — SERVER ONLY
  * ─────────────────────────────────────────────────────────────────────────────
  * Bypasses Row Level Security. Use ONLY in Server Actions, Route Handlers, and
- * admin-guarded Server Components (see (portal)/clients/setup-state.ts),
- * and only for operations that genuinely cannot be done as the signed-in user:
- * inviting an auth user, and promoting that user to the `client` role.
+ * admin-guarded Server Components, and only for operations that genuinely
+ * cannot be done as the signed-in user.
  *
- * Every caller must check `is_admin` itself first — this client will happily
+ * Every caller must check authorisation itself first — this client will happily
  * do anything it is asked.
  *
- * NEVER import this from a 'use client' component. The runtime guard below is
- * a backstop, not a substitute for keeping the import graph clean.
+ * Current consumers:
+ *   - src/lib/push.ts — reading push subscriptions for OTHER users (owner-only
+ *     RLS correctly blocks the acting user's session client from seeing
+ *     recipients' subscription keys).
+ *   - (portal)/clients/actions.ts — inviting an auth user and promoting them to
+ *     the `client` role, which must happen before they ever log in.
+ *   - (portal)/clients/setup-state.ts — reading auth.users.last_sign_in_at to
+ *     tell an unclicked invite apart from a live account.
+ *
+ * TWO GUARDS, deliberately belt-and-braces:
+ *   1. `import 'server-only'` turns any client-bundle import into a BUILD error.
+ *   2. The runtime `typeof window` check below is a backstop for anything that
+ *      slips past the bundler.
+ * Neither substitutes for keeping the import graph clean.
  *
  * USAGE (Server Action):
  *   import { createAdminClient } from '@/lib/supabase/admin'
@@ -18,6 +29,7 @@
  *   await admin.auth.admin.inviteUserByEmail(email)
  * ─────────────────────────────────────────────────────────────────────────────
  */
+import 'server-only'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export function createAdminClient() {
@@ -35,7 +47,7 @@ export function createAdminClient() {
   }
   if (!serviceRoleKey) {
     throw new Error(
-      'SUPABASE_SERVICE_ROLE_KEY is not set — client invites cannot be sent without it. Add it to .env.local (and to Vercel for production).',
+      'SUPABASE_SERVICE_ROLE_KEY is not set — client invites and push delivery cannot work without it. Add it to .env.local (and to Vercel for production).',
     )
   }
 

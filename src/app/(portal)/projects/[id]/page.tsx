@@ -83,6 +83,13 @@ export default async function ProjectDetailPage({ params }: Props) {
 
   const project = projectRaw as ProjectSummary & { members: ProjectDetail['members'] }
 
+  // Admins are mentionable in every project even when not on the roster —
+  // matches the recipient boundary notifyMentions enforces server-side
+  const { data: adminUsers } = await supabase
+    .from('users').select('*')
+    .eq('role', 'admin').eq('approved', true)
+    .order('name', { ascending: true })
+
   // All approved providers (for TeamTab add-member picker) — admin only.
   // A client or provider payload has no business carrying every approved
   // provider's full row (employment_type included) just to feed a picker
@@ -208,6 +215,7 @@ export default async function ProjectDetailPage({ params }: Props) {
         taskLists={taskLists}
         messages={messages}
         members={members}
+        admins={(adminUsers ?? []) as User[]}
         availableMembers={availableMembers}
         templates={templates}
         isAdmin={isAdmin}

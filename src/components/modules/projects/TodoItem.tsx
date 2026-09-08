@@ -58,6 +58,8 @@ interface TodoItemProps {
   listId:        string
   projectId:    string
   members:       (ProjectMember & { user: User })[]
+  /** Mentionable admins — mentionable in every project even when off the roster. */
+  admins:        User[]
   /** Full viewer role — capabilities below are derived from this, not a single admin flag. */
   viewerRole:    UserRole
   currentUserId: string
@@ -106,6 +108,7 @@ export function TodoItem({
   listId,
   projectId,
   members,
+  admins,
   viewerRole,
   currentUserId,
   onToggle,
@@ -528,6 +531,7 @@ export function TodoItem({
                       <CommentEditor
                         taskId={task.id}
                         members={members}
+                        admins={admins}
                         initialContent={comment.body}
                         submitLabel="Save"
                         autoFocus
@@ -547,6 +551,7 @@ export function TodoItem({
           <CommentEditor
             taskId={task.id}
             members={members}
+            admins={admins}
             onSubmit={handleAddComment}
           />
         </div>

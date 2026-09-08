@@ -153,6 +153,7 @@ $$;
 -- =============================================================================
 
 drop policy if exists "tasks: member claims unassigned" on public.tasks;
+drop policy if exists "tasks: provider claims unassigned" on public.tasks;
 
 create policy "tasks: provider claims unassigned"
   on public.tasks for update

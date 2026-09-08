@@ -21,6 +21,16 @@
 --      WITH CHECK, so they hold even if a server action is wrong.
 --   8. client_projects view — budget-free projection for client screens
 --
+-- NOTE ON POLICY BODIES BEING EDITED IN PLACE: this migration is applied by
+-- hand through the SQL Editor and is written to be re-runnable, so it appears
+-- in no schema_migrations table anywhere. That makes a re-run a real event —
+-- and a re-run of the ORIGINAL text would have silently reverted the fixes in
+-- 015 and 016, reopening them with no error. The client UPDATE policies below
+-- are therefore kept deliberately in sync with the later migrations: each one
+-- carries the same is_project_member(project_id) clause in its WITH CHECK that
+-- 015 and 016 add. Any future change to one of these policy bodies must be
+-- made in BOTH places — 014 and the migration that last touched it.
+--
 -- NOTE ON ROLE ASSIGNMENT: invited clients are promoted by the invite server
 -- action (service role), NOT by reading a role out of raw_user_meta_data.
 -- User metadata is writable by the signing-up user, so trusting it would let
@@ -243,6 +253,10 @@ create policy "tasks: client edits own pending"
     and created_by   = auth.uid()
     and points_value = 0
     and status       = 'pending'
+    -- is_project_member added by migration 015: without it a client could
+    -- PATCH project_id on their own pending task into a project they are not
+    -- a member of. Kept here so a re-run of 014 does not revert 015.
+    and public.is_project_member(project_id)
     and (assignee_id is null or public.is_member_of(project_id, assignee_id))
   );
 
@@ -276,6 +290,9 @@ create policy "task_lists: client renames own"
   with check (
     public.get_user_role() = 'client'
     and created_by = auth.uid()
+    -- is_project_member added by migration 016 — same project-hopping gap as
+    -- the task policy above. Kept here so a re-run of 014 does not revert it.
+    and public.is_project_member(project_id)
   );
 
 -- Deleting a phase sets task_list_id to null on its tasks (migration 002), so
@@ -312,6 +329,9 @@ create policy "messages: client edits own"
     public.get_user_role() = 'client'
     and author_id         = auth.uid()
     and is_client_visible = true
+    -- is_project_member added by migration 016 — same project-hopping gap as
+    -- the task policy above. Kept here so a re-run of 014 does not revert it.
+    and public.is_project_member(project_id)
   );
 
 drop policy if exists "messages: client deletes own" on public.messages;

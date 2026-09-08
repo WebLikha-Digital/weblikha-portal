@@ -7,8 +7,17 @@
  * stacks vertically below sm and lays out horizontally above it.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { Avatar, Badge } from '@/components/ui'
+import { useOptimistic, useState, useTransition } from 'react'
+import { Mail, Ban, RotateCcw } from 'lucide-react'
+import { Avatar, Badge, Button } from '@/components/ui'
 import type { BadgeProps } from '@/components/ui'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { toast, withToast } from '@/components/ui/toast'
+import {
+  resendClientInvite,
+  revokeClientAccess,
+  restoreClientAccess,
+} from '@/app/(portal)/clients/actions'
 import type { ClientRow, ClientSetupStatus, PickerProject } from '@/types'
 
 interface ClientListProps {
@@ -26,7 +35,72 @@ const STATUS_META: Record<
 }
 
 export function ClientList({ rows, allProjects: _allProjects }: ClientListProps) {
-  if (rows.length === 0) {
+  const [, startTransition] = useTransition()
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  // Only `status` moves optimistically. Project chips are handled in Task 3.
+  const [optimisticRows, patchStatus] = useOptimistic(
+    rows,
+    (state: ClientRow[], patch: { id: string; status: ClientSetupStatus }) =>
+      state.map(r => (r.user.id === patch.id ? { ...r, status: patch.status } : r)),
+  )
+
+  function handleResend(row: ClientRow) {
+    setBusyId(row.user.id)
+    startTransition(async () => {
+      await withToast(
+        async () => {
+          await resendClientInvite(row.user.id)
+          toast.success(`Sent a fresh setup link to ${row.user.email}.`)
+        },
+        'Could not resend the invite.',
+      )
+      setBusyId(null)
+    })
+  }
+
+  async function handleRevoke(row: ClientRow) {
+    const count = row.projects.length
+    const ok = await confirmDialog({
+      title: `Revoke access for ${row.user.name}?`,
+      message:
+        `They'll be signed out of the portal and removed from ` +
+        `${count} assigned project${count === 1 ? '' : 's'}. Restoring them later ` +
+        `does not restore project access — you'll need to reassign projects deliberately.`,
+      confirmLabel: 'Revoke access',
+    })
+    if (!ok) return
+
+    setBusyId(row.user.id)
+    startTransition(async () => {
+      patchStatus({ id: row.user.id, status: 'revoked' })
+      await withToast(
+        async () => {
+          await revokeClientAccess(row.user.id)
+          toast.success(`${row.user.name} no longer has portal access.`)
+        },
+        'Could not revoke access.',
+      )
+      setBusyId(null)
+    })
+  }
+
+  function handleRestore(row: ClientRow) {
+    setBusyId(row.user.id)
+    startTransition(async () => {
+      patchStatus({ id: row.user.id, status: 'invite_pending' })
+      await withToast(
+        async () => {
+          await restoreClientAccess(row.user.id)
+          toast.success(`${row.user.name} can sign in again. Reassign their projects.`)
+        },
+        'Could not restore access.',
+      )
+      setBusyId(null)
+    })
+  }
+
+  if (optimisticRows.length === 0) {
     return (
       <div className="card px-6 py-12 flex flex-col items-center text-center gap-2">
         <p className="text-sm font-medium text-primary">No clients yet</p>
@@ -39,7 +113,7 @@ export function ClientList({ rows, allProjects: _allProjects }: ClientListProps)
 
   return (
     <div className="space-y-2">
-      {rows.map(({ user, projects, status }) => {
+      {optimisticRows.map(({ user, projects, status }) => {
         const meta = STATUS_META[status]
         return (
           <div
@@ -67,6 +141,42 @@ export function ClientList({ rows, allProjects: _allProjects }: ClientListProps)
                       </span>
                     ))}
               </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+              {status === 'invite_pending' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Mail className="size-3.5" />}
+                  loading={busyId === user.id}
+                  onClick={() => handleResend({ user, projects, status })}
+                >
+                  Resend
+                </Button>
+              )}
+              {status === 'revoked' ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={<RotateCcw className="size-3.5" />}
+                  loading={busyId === user.id}
+                  onClick={() => handleRestore({ user, projects, status })}
+                >
+                  Restore
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Ban className="size-3.5" />}
+                  loading={busyId === user.id}
+                  onClick={() => handleRevoke({ user, projects, status })}
+                  className="text-tertiary hover:text-danger hover:bg-danger/10"
+                >
+                  Revoke
+                </Button>
+              )}
             </div>
           </div>
         )

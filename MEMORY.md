@@ -20,7 +20,7 @@ is still missing — see the table below for exactly what of Stage 4 already lan
 | 2 | `/clients` admin page + nav | ✅ Done |
 | 3 | Message board | ⬜ Not started — still a read-only shell, see below |
 | 4 | Client dashboard + project view | 🟡 Partial: client nav set, `/rewards` guard, to-do capability gates, Team tab names-and-roles-only, "empty to-do list" query fix. **The client dashboard itself is not built.** |
-| — | Verification pass | 🟡 Migrations 017 + 018 written and reviewed but **applied nowhere** |
+| — | Verification pass | 🟡 015–018 applied to dev **and** prod; PR #3 merged to `main`. The four client-portal findings have **not** been re-tested against the applied migrations. |
 
 **Post-launch checklist — all resolved (2026-07-13):**
 - Admin bootstrap in prod, RLS smoke test, points trigger test, Vercel Preview env vars → dev Supabase: confirmed done by Matthew.
@@ -73,9 +73,10 @@ that is what "Invalid API key" on invite meant) · redirect URLs · both email t
 switched to `{{ .TokenHash }}` on dev and prod.
 
 Open:
-- **Apply migrations 017 then 018**, dev first, then prod. Nothing has run them; the Team
-  tab stays empty and the client phase-delete guard is absent until they do.
-- Resolve the duplicate migration 014 numbering (see "Production deploy" below).
+- **Re-test the four client-portal findings** now that 017/018 are applied: client sees the
+  to-do list, can add a phase, sees the Team tab populated, and does not see Rewards.
+- Resolve the duplicate migration 014 numbering and repair `schema_migrations` (see
+  "Production deploy" below) — `db push` is unsafe until then.
 - Vercel env vars for prod: `NEXT_PUBLIC_SITE_URL` (**Production scope only** — leave unset
   for Preview so `getSiteUrl()` falls back to `VERCEL_URL` and each preview links to itself),
   `RESEND_API_KEY`, `RESEND_FROM`
@@ -96,8 +97,14 @@ both projects every 3 days.
 
 | Environment | Has | Missing |
 |---|---|---|
-| dev `tydreidoqzndxjftpyzd` | 001–013, 014 client-collab, 015, 016 | **017, 018** |
-| prod `vhsuyouczctnkvnnjzgg` | 001–013, 014 push-subscriptions, 014 client-collab, 015, 016 (+ the 016 admin-escalation hotfix applied by hand first) | **017, 018** |
+| dev `tydreidoqzndxjftpyzd` | 001–013, 014 client-collab, 015–018 | — |
+| prod `vhsuyouczctnkvnnjzgg` | 001–013, 014 push-subscriptions, 014 client-collab, 015–018 (+ the 016 admin-escalation hotfix applied by hand first) | — |
+
+All of 014–018 were applied through the **SQL Editor**, so `schema_migrations` has no
+record of them. `npx supabase db push` would therefore try to replay all five — and with
+two files numbered 014 the order is undefined. **Do not use `db push` until the numbering
+is resolved and `schema_migrations` is repaired** (`npx supabase migration list` shows the
+local-vs-remote picture once CLI auth works). The SQL Editor is the safe path meanwhile.
 
 ⚠️ `014_push_subscriptions.sql` (from the web-push branch) and `014_client_collaboration.sql`
 (from the client-portal branch) share a number. `supabase db push` orders by filename, so

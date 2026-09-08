@@ -18,13 +18,17 @@
 
 -- NOTE — DELIBERATE BACK-PORT FROM MIGRATIONS 017 AND 018.
 -- `set search_path` was not in the original 011. It was added by 017 (as
--- `= public`) and widened by 018 to the documented-safe `= public, pg_temp`.
+-- `= public`), and 018 established the documented-safe `= public, pg_temp`
+-- form that both this copy and 017's own now use.
 -- This file is applied by hand through the SQL Editor and advertised as
 -- re-runnable, so a re-run of the ORIGINAL text would have silently un-pinned
 -- that fix — a SECURITY DEFINER function resolving unqualified names through
 -- the CALLER's search_path, with no error and nothing visibly different.
 -- Kept in sync on purpose: any future change to this body must be made in
--- BOTH places — here and in the migration that last touched it (018).
+-- BOTH places — here and in the migration that last DEFINES this function,
+-- which is 017 section 0, not 018. (018 pins five other definer functions but
+-- deliberately leaves is_admin and is_project_member to 017; it only supplied
+-- the `, pg_temp` form both files now use.)
 create or replace function public.is_project_member(pid uuid)
 returns boolean
 language sql

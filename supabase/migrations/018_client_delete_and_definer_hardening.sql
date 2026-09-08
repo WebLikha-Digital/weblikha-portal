@@ -25,6 +25,14 @@
 --      addressable, so a server action is a convenience, not a guard. Only
 --      RLS and triggers count.
 --
+--      THE RULE THE GUARD ENFORCES: everything in the phase must be a task
+--      this client could delete on its own — created_by = auth.uid() AND
+--      status = 'pending', mirroring "tasks: client deletes own pending"
+--      exactly. Authorship alone is NOT the test: a to-do the client filed,
+--      an admin triaged to 60 points and a provider carried to done is no
+--      longer deletable row-by-row, and must not become deletable in bulk by
+--      dropping the phase around it. See section 1 for the full walkthrough.
+--
 --   2. A client can drag the team's tasks between phases. public.reorder_task
 --      (012) is SECURITY DEFINER and asks only
 --          is_admin() OR is_project_member(v_project).
@@ -57,11 +65,14 @@
 -- function pinned to `= public` alone can therefore still be fed a
 -- caller-created temporary table shadowing a public one. Naming pg_temp last
 -- is the documented-safe form. 004 (get_user_role, check_task_project_
--- consistency), 014 (is_member_of) and 017 (is_admin, is_project_member) all
--- use the abbreviated `= public` — they should be brought in line with this
--- form in a later migration. Deliberately NOT changed here: 017's two
--- functions back every policy in the schema and are better re-touched on
--- their own, not folded into an unrelated fix.
+-- consistency) and 014 (is_member_of) still use the abbreviated `= public` —
+-- they should be brought in line with this form in a later migration.
+-- 017's two functions (is_admin, is_project_member) ALSO used the short form
+-- and are not redefined by this file, but because 017 is itself advertised as
+-- re-runnable, a replay of it would have downgraded the pin that 001 and 011
+-- carry; 017 has since been widened in place to `= public, pg_temp` in the
+-- same commit as this migration, so all three copies agree. Their definitions
+-- still live in 017 — change them there, not here.
 --
 -- WHY `create or replace` THROUGHOUT: triggers on tasks and task_comments and
 -- the users SELECT policy depend on these functions. A drop would either
@@ -77,7 +88,29 @@
 
 
 -- =============================================================================
--- 1. CRITICAL — A CLIENT MAY NOT DELETE A PHASE HOLDING TEAM WORK (fix 1)
+-- 1. CRITICAL — A CLIENT MAY ONLY DELETE A PHASE THEY COULD EMPTY THEMSELVES
+--    (fix 1)
+--
+-- THE RULE, STATED ONCE: everything in the phase must be a task this client
+-- could delete on its own. That is the row-level test in "tasks: client
+-- deletes own pending" (section 3) — created_by = auth.uid() AND
+-- status = 'pending' — applied to every task in the phase. Both halves are
+-- load-bearing:
+--
+--   * created_by  — a phase the client created can hold team-filed work;
+--   * status      — a to-do the CLIENT filed stops being theirs the moment an
+--                   admin triages it. Client tasks are born points_value = 0
+--                   and pending; triage bumps them to 60 and assigns a
+--                   provider, who works them to in_progress / done and banks
+--                   points in performance_periods. The client cannot
+--                   DELETE /rest/v1/tasks?id=eq.<t> on any of those — the
+--                   policy demands status = 'pending'. An authorship-only
+--                   phase guard would have let them send
+--                   DELETE /rest/v1/task_lists?id=eq.<phase> instead and null
+--                   task_list_id on the whole batch through the FK, erasing
+--                   completed team work from every screen while the awarded
+--                   points stayed banked. Same data-loss shape as the
+--                   orphaning vector below, reached by a different door.
 --
 -- Enforces at the database exactly what deleteTaskList tries to enforce in the
 -- server action. Admins and providers are unaffected: both return early.
@@ -113,7 +146,9 @@
 -- `created_by IS DISTINCT FROM auth.uid()` (not `<>`) is deliberate: tasks
 -- predating 014 carry created_by = NULL, and `NULL <> uid` is NULL, not true,
 -- so a plain inequality would let a phase full of legacy team tasks be
--- deleted. A task the client cannot prove they filed is team work.
+-- deleted. A task the client cannot prove they filed is team work. The status
+-- half is written the same way for symmetry — tasks.status is NOT NULL (001),
+-- so it behaves as `<>` there, but the two halves must not drift apart.
 --
 -- Cascades are safe: dropping a project cascades into task_lists and fires
 -- this trigger per row, but only admins can delete a project, and the
@@ -137,12 +172,23 @@ begin
     return old;
   end if;
 
+  -- A client may delete a phase only when EVERY task in it is one they could
+  -- have deleted individually. "tasks: client deletes own pending" (section 3)
+  -- requires created_by = auth.uid() AND status = 'pending', so both halves
+  -- have to appear here — authorship alone would let a client destroy work
+  -- they filed but an admin has since triaged and the team has worked on.
   if exists (
     select 1
     from public.tasks t
     where t.task_list_id = old.id
-      and t.created_by is distinct from auth.uid()
+      and (t.created_by is distinct from auth.uid()
+           or t.status is distinct from 'pending')
   ) then
+    -- Message left byte-for-byte as it was: the deleteTaskList server action
+    -- in src/app/(portal)/projects/actions.ts throws the identical string, and
+    -- this change is SQL-only. The widened predicate can now also catch a task
+    -- the client DID file but that is no longer pending; the copy stays
+    -- deliberately generic rather than drifting from the app's.
     raise exception
       'This phase has to-dos you did not file — ask an admin to delete it.'
       using errcode = '42501';
@@ -153,7 +199,7 @@ end;
 $$;
 
 comment on function public.guard_client_task_list_delete() is
-  'Blocks a client from deleting a phase that holds any task they did not create. tasks.task_list_id is ON DELETE SET NULL (002) and referential actions bypass RLS, so without this a client could orphan team to-dos out of every screen with one PostgREST DELETE. SECURITY DEFINER so the check sees every task in the phase, not only the ones the deleting client can read.';
+  'Blocks a client from deleting a phase unless EVERYTHING in it is a task that client could delete on its own — i.e. created_by = auth.uid() AND status = ''pending'', the exact test in the "tasks: client deletes own pending" row policy. Authorship alone is not enough: a to-do the client filed but an admin has since triaged and the team has worked on is no longer theirs to remove. tasks.task_list_id is ON DELETE SET NULL (002) and referential actions bypass RLS, so without this a client could orphan that work out of every screen with one PostgREST DELETE while the awarded points stay banked. SECURITY DEFINER so the check sees every task in the phase, not only the ones the deleting client can read.';
 
 drop trigger if exists task_lists_guard_client_delete on public.task_lists;
 create trigger task_lists_guard_client_delete
@@ -320,7 +366,8 @@ create policy "task_lists: client deletes own"
     and created_by = auth.uid()
     -- Added by migration 018, same reason as the task policy above. The
     -- BEFORE DELETE trigger in section 1 additionally refuses any phase that
-    -- holds a task this client did not file.
+    -- holds a task this client could not have deleted on its own — i.e. one
+    -- they did not file, OR one they filed that is no longer pending.
     and public.is_project_member(project_id)
   );
 
@@ -531,19 +578,47 @@ $$;
 --     recreated it cleanly and handed clients back the ability to assign team
 --     work to themselves. That statement is now commented out in 011 with a
 --     pointer to 014 section 4.
+--   * 012 is the single most re-runnable file in the directory: it contains
+--     nothing but `create or replace function` and `comment on function`, so
+--     unlike 001 or 008 it never aborts on a `create table`. It still held the
+--     pre-018 reorder_task — no client branch, no pinned search_path — so a
+--     replay would have reverted fix 2 above in full, silently, handing
+--     clients back the ability to drag team tasks between phases. 012's body
+--     is now byte-identical to section 2's, with a back-port note.
+--   * 001 still holds the ORIGINAL award_task_points, which predates the 008
+--     completion fix, 014's `points_value > 0` deadline gate and the
+--     search_path pin. It is not back-ported — the live version is 60 lines
+--     and two copies would be worse than one — but it now carries a
+--     `*** SUPERSEDED ***` banner naming section 4 of this file, in the style
+--     of 011's neutralised claim policy.
+--   * 017 pinned is_admin and is_project_member with the weaker `= public`
+--     while 001 and 011 carry `= public, pg_temp`. 017 is explicitly
+--     re-runnable, so the weaker form won any replay. Both of 017's functions
+--     are now `= public, pg_temp`.
 --
 -- This follows the precedent 014 set (see its NOTE ON POLICY BODIES BEING
 -- EDITED IN PLACE): where a re-runnable file would revert a later fix, the
 -- fix is back-ported into it and both copies are kept in sync deliberately.
 --
--- STILL A HAZARD, NOT ADDRESSED HERE: 014 section 7's delete policies
--- ("tasks: client deletes own pending" at 014:264 and "task_lists: client
--- deletes own" at 014:302) do NOT carry the is_project_member(project_id)
--- clause that section 3 above adds, so a re-run of 014 will revert fix 3 —
--- exactly the failure mode 014's own header warns about for the UPDATE
--- policies. The same back-port should be applied to those two policy bodies
--- in 014. Left out of this change only because its scope was limited to 001
--- and 011; it should be the first follow-up.
+-- DONE, NOT OUTSTANDING: 014 section 7's two client DELETE policies
+-- ("tasks: client deletes own pending" and "task_lists: client deletes own")
+-- now BOTH carry the is_project_member(project_id) clause that section 3
+-- above adds — back-ported in place, each with a "Kept here so a re-run of
+-- 014 does not revert it" note, matching what 015 and 016 did for the UPDATE
+-- policies. A re-run of 014 therefore does not revert fix 3. Verified against
+-- the file, not assumed; if you are auditing, grep 014 for
+-- `client deletes own` and confirm both USING clauses still name
+-- is_project_member.
+--
+-- The BEFORE DELETE trigger from section 1 is NOT duplicated into 014 and
+-- does not need to be. 014 does touch task_lists — it creates
+-- task_lists_set_updated_at (014:70) — but it neither drops nor replaces
+-- task_lists_guard_client_delete, and a `create trigger` on a different name
+-- cannot displace it. Re-running 014 therefore leaves the guard intact.
+-- 014's own award_task_points (014:87) already carries
+-- `set search_path = public, pg_temp`, so a re-run of 014 does not un-pin the
+-- copy in section 4 either. 014's is_member_of (014:192) is still on the
+-- abbreviated `= public` — listed in this file's header as outstanding.
 -- =============================================================================
 
 
@@ -564,6 +639,16 @@ $$;
 --      Must raise. Afterwards confirm no task was orphaned:
 --        select count(*) from public.tasks
 --        where project_id = '<project id>' and task_list_id is null;   -- 0
+--
+--   1b. A CLIENT CANNOT DELETE A PHASE HOLDING THEIR OWN TRIAGED WORK.
+--      As that client: create a phase and file a to-do into it. As admin:
+--      raise that to-do's points_value to 60 and assign a provider; as the
+--      provider, move it to in_progress (or done). As the client again, delete
+--      the phase — must be refused with the same 42501, even though every task
+--      in it carries their own created_by. Then confirm nothing was orphaned:
+--        select count(*) from public.tasks
+--        where project_id = '<project id>' and task_list_id is null;   -- 0
+--      Set the to-do back to pending and the delete must succeed again.
 --
 --   2. A CLIENT CANNOT DRAG A TEAM TASK TO ANOTHER PHASE.
 --      As that client, in the Todos tab, drag an admin-created task into a

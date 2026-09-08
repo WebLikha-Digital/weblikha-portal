@@ -62,8 +62,18 @@
 --
 -- Done ahead of the policies below because both policies call into these.
 -- Bodies and signatures are carried over verbatim from 001 and 011 — the only
--- change is the added `set search_path = public`, matching get_user_role()
--- (004) and is_member_of() (014). What they return is unchanged.
+-- change is the added `set search_path`. What they return is unchanged.
+--
+-- NOTE — WIDENED IN PLACE TO MATCH MIGRATION 018. This file originally pinned
+-- both functions to the abbreviated `= public`. 018 established
+-- `= public, pg_temp` as the documented-safe form: Postgres searches pg_temp
+-- FIRST for unqualified relation names unless pg_temp is named explicitly, so
+-- `= public` alone can still be fed a caller-created temporary table shadowing
+-- a public one. This file is explicitly advertised as re-runnable, so leaving
+-- the weaker form here meant a replay of 017 silently downgraded the pin that
+-- 001 and 011 already carry. Both lines below now read
+-- `= public, pg_temp`; keep all copies in sync — 001 (is_admin), 011
+-- (is_project_member) and this file.
 --
 -- `create or replace` rather than drop + create: policies across tasks,
 -- task_lists, messages, projects, users, performance_periods and
@@ -85,7 +95,7 @@ returns boolean
 language sql
 security definer
 stable
-set search_path = public
+set search_path = public, pg_temp
 as $$
   select coalesce(
     (select role = 'admin' from public.users where id = auth.uid()),
@@ -94,7 +104,7 @@ as $$
 $$;
 
 comment on function public.is_admin() is
-  'True when the current auth user has role = admin. SECURITY DEFINER bypasses users RLS; search_path pinned to public by migration 017.';
+  'True when the current auth user has role = admin. SECURITY DEFINER bypasses users RLS; search_path pinned to public, pg_temp (017, widened to the form migration 018 established).';
 
 -- public.is_project_member(uuid) — body verbatim from 011, lines 15-26.
 -- SECURITY DEFINER is load-bearing here, not incidental: fix 2 below puts this
@@ -105,7 +115,7 @@ returns boolean
 language sql
 security definer
 stable
-set search_path = public
+set search_path = public, pg_temp
 as $$
   select exists (
     select 1 from public.project_members pm
@@ -115,7 +125,7 @@ as $$
 $$;
 
 comment on function public.is_project_member is
-  'True when the current auth user is a member of the given project. security definer so RLS policies can use it without recursive policy checks; search_path pinned to public by migration 017.';
+  'True when the current auth user is a member of the given project. security definer so RLS policies can use it without recursive policy checks; search_path pinned to public, pg_temp (017, widened to the form migration 018 established).';
 
 
 -- =============================================================================

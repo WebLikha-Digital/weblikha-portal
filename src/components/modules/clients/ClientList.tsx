@@ -155,13 +155,23 @@ export function ClientList({ rows, allProjects }: ClientListProps) {
               >
                 Manage projects
               </Button>
-              {status === 'invite_pending' && (
+              {/*
+                Shown for every non-revoked client, not just `invite_pending`.
+                Status is derived from last_sign_in_at, which GoTrue stamps the
+                moment the verify URL is hit — including when a corporate mail
+                scanner pre-fetches it. That flips the row to Active without the
+                client ever seeing the page, so gating Resend on
+                `invite_pending` hid the button from exactly the person who
+                needs it. Kept visually quieter once they are Active.
+              */}
+              {status !== 'revoked' && (
                 <Button
                   size="sm"
                   variant="ghost"
                   icon={<Mail className="size-3.5" />}
                   loading={busyId === user.id}
                   onClick={() => handleResend({ user, projects, status })}
+                  {...(status === 'active' ? { className: 'text-tertiary' } : {})}
                 >
                   Resend
                 </Button>

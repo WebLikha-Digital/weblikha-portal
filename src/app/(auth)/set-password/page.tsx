@@ -3,8 +3,12 @@
  * SET PASSWORD PAGE
  * ─────────────────────────────────────────────────────────────────────────────
  * Where an invited client lands after clicking the invite email. By the time
- * this renders, /auth/callback has already exchanged the invite code for a
- * session — so this page only has to set a password on the existing user.
+ * this renders, /auth/confirm has already verified the email's token hash
+ * (`verifyOtp`) and written the session cookies on that redirect response —
+ * so this page only has to set a password on the existing user.
+ *
+ * NOT /auth/callback: an admin-generated invite has no PKCE code verifier
+ * anywhere, so there is no `?code=` to exchange. See /auth/confirm's header.
  *
  * Also doubles as the reset-password destination, since Supabase's recovery
  * flow ends in the same place: an authenticated session that needs a new

@@ -1,14 +1,16 @@
 /**
  * SIDEBAR COMPONENT
  * ─────────────────────────────────────────────────────────────────────────────
- * Role-aware navigation. Admins see everything; providers see only their
- * relevant pages (Dashboard, Projects, Rewards).
+ * Role-aware navigation. Admins see everything; providers see their internal
+ * pages (Dashboard, Projects, Rewards); clients see only Dashboard and
+ * Projects — client accounts must never see team-internal nav (Rewards,
+ * Team, Revenue, Clients, Settings).
  *
  * Collapsible: the toggle on the right edge shrinks it to an icon rail.
  * Collapse state lives in PortalShell (so the content margin can respond).
  *
  * TO ADD A NAV ITEM:
- *   1. Add an entry to ADMIN_NAV or PROVIDER_NAV below.
+ *   1. Add an entry to ADMIN_NAV, PROVIDER_NAV, or CLIENT_NAV below.
  *   2. Create the corresponding page at src/app/(portal)/<href>/page.tsx.
  * ─────────────────────────────────────────────────────────────────────────────
  */
@@ -26,6 +28,7 @@ import {
   Trophy,
   PanelLeftClose,
   PanelLeftOpen,
+  UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui'
@@ -38,6 +41,7 @@ const ADMIN_NAV = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Projects',  href: '/projects',  icon: Folder },
   { label: 'Team',      href: '/team',      icon: Users },
+  { label: 'Clients',   href: '/clients',   icon: UserPlus },
   { label: 'Revenue',   href: '/revenue',   icon: BarChart3 },
 ] as const
 
@@ -47,9 +51,20 @@ const PROVIDER_NAV = [
   { label: 'Rewards',   href: '/rewards',   icon: Trophy },
 ] as const
 
+// Clients only ever get Dashboard + Projects — no team-internal pages.
+const CLIENT_NAV = [
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Projects',  href: '/projects',  icon: Folder },
+] as const
+
 const ADMIN_BOTTOM = [
   { label: 'Settings', href: '/settings', icon: Settings },
 ] as const
+
+// The three nav arrays above are differently-shaped readonly tuples (`as const`),
+// so picking between them needs a common element type rather than relying on
+// inference to unify the tuples themselves.
+type NavItem = { label: string; href: string; icon: typeof LayoutDashboard }
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -61,10 +76,28 @@ interface SidebarProps {
 }
 
 export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
-  const pathname    = usePathname()
-  const isAdmin     = user.role === 'admin'
-  const navItems    = isAdmin ? ADMIN_NAV    : PROVIDER_NAV
-  const bottomItems = isAdmin ? ADMIN_BOTTOM : []
+  const pathname = usePathname()
+
+  // Explicit three-way selection, not a binary. An unrecognized role (should
+  // never happen given the `User['role']` union, but the fall-through must
+  // still be safe against future roles or bad data) gets CLIENT_NAV — the
+  // most restrictive set — rather than defaulting to PROVIDER_NAV, so a new
+  // or malformed role can never inherit team-internal nav by accident.
+  let navItems: readonly NavItem[]
+  switch (user.role) {
+    case 'admin':
+      navItems = ADMIN_NAV
+      break
+    case 'provider':
+      navItems = PROVIDER_NAV
+      break
+    case 'client':
+      navItems = CLIENT_NAV
+      break
+    default:
+      navItems = CLIENT_NAV
+  }
+  const bottomItems = user.role === 'admin' ? ADMIN_BOTTOM : []
 
   const linkClass = (isActive: boolean) => cn(
     'flex items-center gap-2.5 rounded-md py-2 text-sm transition-colors duration-fast',

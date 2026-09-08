@@ -17,7 +17,7 @@ import { MessagesTab } from '@/components/modules/projects/MessagesTab'
 import { TeamTab } from '@/components/modules/projects/TeamTab'
 import type {
   TaskListWithTasks, MessageWithAuthor,
-  User, ProjectTemplate, ProjectDetail,
+  User, ProjectTemplate, ProjectDetail, UserRole,
 } from '@/types'
 
 type Tab = 'todos' | 'messages' | 'team'
@@ -38,6 +38,8 @@ interface ProjectTabsLayoutProps {
   availableMembers: User[]
   templates:        ProjectTemplate[]
   isAdmin:          boolean
+  /** Full viewer role — TodosTab derives its per-capability gates from this. */
+  viewerRole:       UserRole
 }
 
 export function ProjectTabsLayout({
@@ -50,6 +52,7 @@ export function ProjectTabsLayout({
   availableMembers,
   templates,
   isAdmin,
+  viewerRole,
 }: ProjectTabsLayoutProps) {
   const [activeTab, setActiveTab] = useState<Tab>('todos')
 
@@ -82,7 +85,7 @@ export function ProjectTabsLayout({
           members={members}
           admins={admins}
           templates={templates}
-          isAdmin={isAdmin}
+          viewerRole={viewerRole}
         />
       )}
       {activeTab === 'messages' && (
@@ -94,6 +97,7 @@ export function ProjectTabsLayout({
           members={members}
           availableMembers={availableMembers}
           isAdmin={isAdmin}
+          viewerRole={viewerRole}
         />
       )}
     </>

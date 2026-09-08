@@ -49,6 +49,30 @@ export interface Project {
   updated_at:  string
 }
 
+/**
+ * Budget-free projection of `projects`, backed by the `client_projects` view
+ * (migration 014). Client-facing screens read this instead of Project so the
+ * budget column is never fetched. RLS still applies via security_invoker.
+ */
+export type ClientProject = Omit<Project, 'budget' | 'created_by' | 'updated_at'>
+
+// ── Client admin page (derived, not DB-backed) ────────────────────────────────
+
+/** Where a client is in onboarding. Derived in clients/page.tsx — see
+ *  setup-state.ts for why this is read from auth.users rather than stored. */
+export type ClientSetupStatus = 'active' | 'invite_pending' | 'revoked'
+
+/** The project shape the assignment pickers need — no budget, no description. */
+export type PickerProject = Pick<Project, 'id' | 'name' | 'status'>
+
+/** One row of the /clients table, assembled server-side so the client
+ *  component never has to join memberships to projects itself. */
+export interface ClientRow {
+  user:     User
+  projects: PickerProject[]
+  status:   ClientSetupStatus
+}
+
 export interface ProjectMember {
   id:               string
   project_id:       string
@@ -62,7 +86,9 @@ export interface TaskList {
   project_id: string
   name:       string
   position:   number
+  created_by: string | null   // Null for phases predating migration 014
   created_at: string
+  updated_at: string
 }
 
 export interface Task {
@@ -75,8 +101,9 @@ export interface Task {
   status:       TaskStatus
   due_date:     string
   completed_at: string | null
-  points_value: number        // Default 60 (task completion points)
+  points_value: number        // Default 60; client-filed tasks are 0 until triaged
   position:     number        // Sort order within the task list
+  created_by:   string | null // Null for tasks predating migration 014
   created_at:   string
   updated_at:   string
 }
@@ -134,6 +161,29 @@ export interface ProjectWithMembers extends Project {
   revenue_entries: RevenueEntry[]
 }
 
+/** ClientProject with its members — the shape a client-role fetch of the
+ *  projects list/detail actually returns. Mirrors ProjectWithMembers minus
+ *  the columns a client query must never select (budget, created_by,
+ *  updated_at) — see CLAUDE.md "Budget caveat". */
+export type ClientProjectWithMembers = ClientProject & {
+  members: (ProjectMember & { user: User })[]
+}
+
+/** Minimal shape the project card/header needs to render. budget is
+ *  optional — honestly, not via `any` or an assertion — so a client-role
+ *  fetch (which never selects budget at all) can be passed here without
+ *  lying about having a column it doesn't. */
+export type ProjectSummary = Pick<
+  Project, 'id' | 'name' | 'client_name' | 'status' | 'start_date' | 'end_date' | 'description'
+> & {
+  budget?: number
+}
+
+/** ProjectSummary + members, as rendered by ProjectCard. */
+export type ProjectCardData = ProjectSummary & {
+  members: (ProjectMember & { user: User })[]
+}
+
 /** Task comment with its author user data */
 export interface TaskCommentWithAuthor extends TaskComment {
   author: User | null
@@ -143,11 +193,15 @@ export interface TaskCommentWithAuthor extends TaskComment {
 export type TaskWithMeta = Task & {
   assignee: User | null
   comments: TaskCommentWithAuthor[]
+  /** Joined creator — role drives the "Added by client" badge */
+  creator:  Pick<User, 'id' | 'name' | 'role'> | null
 }
 
 /** Task list with its tasks, assignee, and comment data */
 export interface TaskListWithTasks extends TaskList {
   tasks: TaskWithMeta[]
+  /** Joined creator — role drives the "Added by client" badge */
+  creator: Pick<User, 'id' | 'name' | 'role'> | null
 }
 
 /** Message with its author user data */
@@ -259,7 +313,11 @@ export interface AdminPointsPayload {
 
 // ── Notifications ──────────────────────────────────────────────────────────────────
 
-export type NotificationType = 'mention' | 'task_assigned'
+export type NotificationType =
+  | 'mention'
+  | 'task_assigned'
+  | 'client_task'
+  | 'client_message'
 
 /** notifications table row (named to avoid clashing with the DOM Notification type) */
 export interface AppNotification {

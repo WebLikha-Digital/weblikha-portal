@@ -152,11 +152,25 @@ alter table public.revenue_entries     enable row level security;
 
 -- Helper: is the current user an admin?
 -- SECURITY DEFINER ensures it runs as the table owner, not the caller.
+--
+-- NOTE — DELIBERATE BACK-PORT FROM MIGRATIONS 017 AND 018.
+-- `set search_path` was not in the original 001. It was added by 017 (as
+-- `= public`), and 018 established the documented-safe `= public, pg_temp`
+-- form that both this copy and 017's own now use.
+-- This file is applied by hand through the SQL Editor and advertised as
+-- re-runnable, so a re-run of the ORIGINAL text would have silently un-pinned
+-- that fix: a SECURITY DEFINER function resolving unqualified names — and
+-- operators and casts — through the CALLER's search_path, with no error and
+-- nothing visibly different. is_admin() backs almost every policy in the
+-- schema, so that is the worst possible function to leave unpinned.
+-- Kept in sync on purpose: any future change to this body must be made in
+-- BOTH places — here and in the migration that last touched it (017).
 create or replace function public.is_admin()
 returns boolean
 language sql
 security definer
 stable
+set search_path = public, pg_temp
 as $$
   select coalesce(
     (select role = 'admin' from public.users where id = auth.uid()),
@@ -284,6 +298,32 @@ create trigger performance_periods_set_updated_at
 
 -- 2. Auto-award task points when a task is marked done
 --    Upserts the matching performance_period row for the assignee.
+--
+-- *** SUPERSEDED — the live definition of public.award_task_points() is in
+--     migration 018_client_delete_and_definer_hardening.sql, section 4.
+--     DO NOT RE-APPLY THE BODY BELOW. ***
+--
+-- Unlike is_admin() above, this one is NOT back-ported: the current function is
+-- three fixes ahead of it and reproducing that here would leave two full
+-- copies of a 60-line trigger to keep in sync. A banner is the right treatment,
+-- matching how 011 handles its superseded claim policy.
+--
+-- The version below predates all three of:
+--   * 008 — completion integrity. It has NO `elsif old.status = 'done'` branch
+--     at all, so un-doing a task neither clears completed_at nor deducts the
+--     points that were awarded. Toggle a task done -> not done -> done and the
+--     assignee is paid twice.
+--   * 014 — the deadline gate. `when now()::date <= new.due_date then 30`
+--     lacks the `new.points_value > 0` guard, so a zero-point client-filed
+--     task still mints a flat +30 the moment anyone closes it.
+--   * 017/018 — the pinned search_path. No `set search_path`, so this
+--     SECURITY DEFINER function resolves unqualified names, operators and
+--     casts through the CALLER's search_path.
+--
+-- Realistic way to trigger it: hand-applying this trigger section through the
+-- SQL Editor — the same route by which the is_admin() back-port above is
+-- reached. `create or replace` will overwrite the live function without a
+-- word of warning. If you need this section, run 018 section 4 afterwards.
 create or replace function public.award_task_points()
 returns trigger
 language plpgsql

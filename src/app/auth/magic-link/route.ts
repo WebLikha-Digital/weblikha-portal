@@ -23,7 +23,12 @@ export async function POST(request: Request) {
 
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: redirectTo },
+    options: {
+      emailRedirectTo: redirectTo,
+      // Magic link is a sign-IN path, not a sign-UP path. Without this,
+      // anyone who knows the URL can mint themselves an account.
+      shouldCreateUser: false,
+    },
   })
 
   if (error) {

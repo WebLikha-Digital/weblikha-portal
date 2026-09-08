@@ -13,7 +13,8 @@ import { ProjectTabsLayout } from '@/components/modules/projects/ProjectTabsLayo
 import { formatDate, formatPeso } from '@/lib/utils'
 import { ChevronRight, CalendarDays, Wallet } from 'lucide-react'
 import type {
-  ProjectDetail, TaskListWithTasks, MessageWithAuthor, User, ProjectTemplate,
+  ProjectDetail, ProjectSummary, TaskListWithTasks, MessageWithAuthor, User, ProjectTemplate,
+  UserRole,
 } from '@/types'
 
 interface Props {
@@ -33,24 +34,54 @@ export default async function ProjectDetailPage({ params }: Props) {
 
   // Current user
   const { data: { user: authUser } } = await supabase.auth.getUser()
-  const { data: currentProfile } = await supabase
+  const { data: currentProfile, error: profileError } = await supabase
     .from('users').select('role').eq('id', authUser!.id).single()
-  const isAdmin = currentProfile?.role === 'admin'
+  if (profileError) {
+    // Non-fatal: the fallback below already treats an unresolved profile as
+    // provider-like, so log and let that degraded-but-functional path run.
+    console.error('[projects/[id]] current-user profile fetch failed — falling back to provider view:', profileError)
+  }
+  const isAdmin  = currentProfile?.role === 'admin'
+  const isClient = currentProfile?.role === 'client'
+  // Fallback matches the pre-existing implicit behaviour: an unresolved
+  // profile was already treated as "not admin, not client" (i.e. provider-like).
+  const viewerRole: UserRole = (currentProfile?.role as UserRole | undefined) ?? 'provider'
 
-  // Project + members
-  const { data: project } = await supabase
-    .from('projects')
-    .select('*, members: project_members(*, user: users(*))')
-    .eq('id', id)
-    .single()
+  // Project + members. Client-role queries use an explicit column list that
+  // omits budget — RLS is row-level, so `select('*')` would hand a client
+  // the whole row including budget (see CLAUDE.md "Budget caveat"). The
+  // members embed also uses an explicit column list for a client viewer —
+  // the same one used at src/app/(portal)/projects/page.tsx — because
+  // `users(*)` would leak `employment_type`, `email`, `skills` and
+  // `approved` for every project member into the client's RSC payload;
+  // admin and provider viewers keep the full row (providers seeing
+  // `employment_type` is intended). The select string is kept literal per
+  // branch (not built at runtime) because supabase-js parses the select
+  // string at the type level.
+  const { data: projectRaw, error: projectError } = isClient
+    ? await supabase
+        .from('projects')
+        .select('id, name, client_name, status, start_date, end_date, description, created_at, members: project_members(*, user: users(id, name, avatar_url, specialty, role))')
+        .eq('id', id)
+        .single()
+    : await supabase
+        .from('projects')
+        .select('*, members: project_members(*, user: users(*))')
+        .eq('id', id)
+        .single()
 
-  if (!project) notFound()
+  // PGRST116 ("no rows") from .single() is the legitimate 404 case — bad id,
+  // or RLS hides the row from this viewer. Any other error is a real query
+  // failure (e.g. an ambiguous embed) and must not be treated as "doesn't
+  // exist" — this is the primary fetch the whole page depends on.
+  if (projectError && projectError.code !== 'PGRST116') {
+    console.error('[projects/[id]] project fetch failed:', projectError)
+    throw new Error('Failed to load this project. See server logs for details.')
+  }
 
-  // All approved providers (for TeamTab add-member picker)
-  const { data: allProviders } = await supabase
-    .from('users').select('*')
-    .eq('role', 'provider').eq('approved', true)
-    .order('name', { ascending: true })
+  if (!projectRaw) notFound()
+
+  const project = projectRaw as ProjectSummary & { members: ProjectDetail['members'] }
 
   // Admins are mentionable in every project even when not on the roster —
   // matches the recipient boundary notifyMentions enforces server-side
@@ -59,26 +90,80 @@ export default async function ProjectDetailPage({ params }: Props) {
     .eq('role', 'admin').eq('approved', true)
     .order('name', { ascending: true })
 
-  // Task lists + tasks + assignees + comment threads
-  const { data: taskListsRaw } = await supabase
+  // All approved providers (for TeamTab add-member picker) — admin only.
+  // A client or provider payload has no business carrying every approved
+  // provider's full row (employment_type included) just to feed a picker
+  // only an admin can open.
+  const { data: allProviders, error: allProvidersError } = isAdmin
+    ? await supabase
+        .from('users').select('*')
+        .eq('role', 'provider').eq('approved', true)
+        .order('name', { ascending: true })
+    : { data: [] as User[], error: null }
+  if (allProvidersError) {
+    // Non-fatal: only feeds the admin add-member picker, not the page's
+    // primary content — degrade to an empty picker rather than failing the page.
+    console.error('[projects/[id]] approved-providers fetch failed — add-member picker will be empty:', allProvidersError)
+  }
+
+  // Task lists + tasks + assignees + creators + comment threads.
+  // `tasks` has TWO foreign keys to `public.users` — `assignee_id` (since
+  // migration 001) and `created_by` (added by migration 014, for the
+  // "Added by client" badge). A bare `users(*)` embed under `tasks` is
+  // therefore ambiguous: PostgREST cannot guess which FK to join through
+  // and returns an error instead of data — which this file used to swallow
+  // by destructuring only `data`, so the failure rendered as the page's
+  // ordinary "no phases yet" empty state. Every `users` embed under `tasks`
+  // must carry an explicit `users!<fk_column>` hint. `task_lists` has only
+  // one FK to `users` (`created_by`), so its embed is unambiguous without a
+  // hint — but the hint is added anyway for symmetry with `tasks` and to
+  // stay unambiguous if a second FK is ever added there too.
+  const { data: taskListsRaw, error: taskListsError } = await supabase
     .from('task_lists')
-    .select('*, tasks(*, assignee: users(*), comments: task_comments(*, author: users(*)))')
+    .select(`
+      *,
+      creator: users!created_by(id, name, role),
+      tasks(
+        *,
+        assignee: users!assignee_id(*),
+        creator: users!created_by(id, name, role),
+        comments: task_comments(*, author: users(*))
+      )
+    `)
     .eq('project_id', id)
     .order('position', { ascending: true })
     .order('position', { referencedTable: 'tasks', ascending: true })
 
-  // Messages + authors
-  const { data: messagesRaw } = await supabase
+  // This is the page's primary content — the To-dos tab — so a query error
+  // here must not be allowed to masquerade as "no phases yet". Throw loudly
+  // instead of silently rendering an empty list.
+  if (taskListsError) {
+    console.error('[projects/[id]] task_lists fetch failed:', taskListsError)
+    throw new Error('Failed to load project phases and tasks. See server logs for details.')
+  }
+
+  // Messages + authors. `messages.author_id` has only one FK to `users`, so
+  // this embed is unambiguous. Treated as non-essential to the whole page:
+  // one tab among three, so log and degrade to an empty message board
+  // rather than failing the entire page over it.
+  const { data: messagesRaw, error: messagesError } = await supabase
     .from('messages')
     .select('*, author: users(*)')
     .eq('project_id', id)
     .order('created_at', { ascending: false })
+  if (messagesError) {
+    console.error('[projects/[id]] messages fetch failed — message board will render empty:', messagesError)
+  }
 
-  // Templates (for TodosTab apply-template picker)
-  const { data: templatesRaw } = await supabase
+  // Templates (for TodosTab apply-template picker) — non-essential, degrade
+  // to an empty picker rather than failing the page.
+  const { data: templatesRaw, error: templatesError } = await supabase
     .from('project_templates')
     .select('id, name, description, created_by, created_at, updated_at')
     .order('name', { ascending: true })
+  if (templatesError) {
+    console.error('[projects/[id]] project_templates fetch failed — apply-template picker will be empty:', templatesError)
+  }
 
   const taskLists = (taskListsRaw  ?? []) as TaskListWithTasks[]
   const messages  = (messagesRaw   ?? []) as MessageWithAuthor[]
@@ -114,10 +199,12 @@ export default async function ProjectDetailPage({ params }: Props) {
             <CalendarDays className="size-3.5 shrink-0 text-tertiary" />
             {formatDate(project.start_date)} → {formatDate(project.end_date)}
           </span>
-          <span className="flex items-center gap-1.5 whitespace-nowrap">
-            <Wallet className="size-3.5 shrink-0 text-tertiary" />
-            {formatPeso(project.budget)}
-          </span>
+          {project.budget !== undefined && (
+            <span className="flex items-center gap-1.5 whitespace-nowrap">
+              <Wallet className="size-3.5 shrink-0 text-tertiary" />
+              {formatPeso(project.budget)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -132,6 +219,7 @@ export default async function ProjectDetailPage({ params }: Props) {
         availableMembers={availableMembers}
         templates={templates}
         isAdmin={isAdmin}
+        viewerRole={viewerRole}
       />
     </div>
   )

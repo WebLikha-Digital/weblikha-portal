@@ -5,13 +5,14 @@ import { UserPlus, X, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { addProjectMember, removeProjectMember } from '@/app/(portal)/projects/actions'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
-import type { ProjectMember, User } from '@/types'
+import type { ProjectMember, User, UserRole } from '@/types'
 
 interface TeamTabProps {
   projectId:        string
   members:          (ProjectMember & { user: User })[]
   availableMembers: User[]
   isAdmin:          boolean
+  viewerRole:       UserRole
 }
 
 type MemberAction =
@@ -28,7 +29,12 @@ function memberReducer(
   }
 }
 
-export function TeamTab({ projectId, members, availableMembers, isAdmin }: TeamTabProps) {
+export function TeamTab({ projectId, members, availableMembers, isAdmin, viewerRole }: TeamTabProps) {
+  // Clients see names and roles only — no email, no employment_type. That is
+  // an agency-internal detail (CLAUDE.md, "Client portal"), and the client
+  // branch of the project query no longer fetches it, so rendering it here
+  // would print `undefined` besides leaking intent.
+  const isClientViewer = viewerRole === 'client'
   const [, startTransition] = useTransition()
   const [optimisticMembers, dispatch] = useOptimistic(members, memberReducer)
   const [showPicker, setShowPicker]   = useState(false)
@@ -115,7 +121,9 @@ export function TeamTab({ projectId, members, availableMembers, isAdmin }: TeamT
                 <Avatar name={m.user.name} src={m.user.avatar_url} size="sm" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-primary">{m.user.name}</p>
-                  <p className="text-2xs text-secondary">{m.user.email}</p>
+                  {!isClientViewer && (
+                    <p className="text-2xs text-secondary">{m.user.email}</p>
+                  )}
                 </div>
                 <span className="text-2xs text-info bg-info/10 px-2 py-0.5 rounded-full">
                   Client

@@ -10,9 +10,27 @@
 --      whole renumber atomically in one transaction.
 --   2. Integrity: rejects moves to a phase in a different project.
 --
+--   *** SUPERSEDED — the live definition of public.reorder_task is in
+--       migration 018 section 2, which added the client restriction and the
+--       pinned search_path. The body below has been BACK-PORTED to match it
+--       exactly; see the note at the function itself. ***
+--
 -- Run via: Supabase Dashboard → SQL Editor, or `supabase db push`
 -- =============================================================================
 
+-- NOTE — DELIBERATE BACK-PORT FROM MIGRATION 018. DO NOT "CLEAN THIS UP".
+-- Neither the client branch nor `set search_path` was in the original 012.
+-- Both were added by 018 section 2. This file contains nothing but
+-- `create or replace function` and `comment on function`, which makes it the
+-- most re-runnable file in the directory — unlike 001 or 008, it does not
+-- abort on a `create table`, so replaying it succeeds silently. A re-run of
+-- the ORIGINAL text would therefore have reverted 018's fix 2 in full, with no
+-- error and nothing visibly different: clients (project_members since 014)
+-- would regain the ability to drag TEAM-created tasks between phases, and the
+-- SECURITY DEFINER function would go back to resolving unqualified names —
+-- and operators and casts — through the CALLER's search_path.
+-- Kept in sync on purpose: any future change to this body must be made in
+-- BOTH places — here and in the migration that last touched it (018).
 create or replace function public.reorder_task(
   p_task_id    uuid,
   p_to_list_id uuid,
@@ -21,17 +39,19 @@ create or replace function public.reorder_task(
 returns void
 language plpgsql
 security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_project    uuid;
   v_from_list  uuid;
+  v_created_by uuid;
   v_to_project uuid;
   v_ids        uuid[];
   v_index      integer;
   i            integer;
 begin
-  select project_id, task_list_id
-    into v_project, v_from_list
+  select project_id, task_list_id, created_by
+    into v_project, v_from_list, v_created_by
   from public.tasks where id = p_task_id;
   if not found then
     raise exception 'Task not found';
@@ -39,6 +59,16 @@ begin
 
   if not (public.is_admin() or public.is_project_member(v_project)) then
     raise exception 'Only project members can reorder tasks';
+  end if;
+
+  -- Clients became project_members in 014, so the membership check above is
+  -- satisfied for every task in their project — including team-created work.
+  -- A client may only move a to-do they filed themselves. created_by is NULL
+  -- on rows predating 014, and IS DISTINCT FROM treats that as "not theirs".
+  if public.get_user_role() = 'client'
+     and v_created_by is distinct from auth.uid() then
+    raise exception 'Clients can only reorder to-dos they created'
+      using errcode = '42501';
   end if;
 
   select project_id into v_to_project
@@ -85,7 +115,7 @@ end;
 $$;
 
 comment on function public.reorder_task is
-  'Drag-and-drop reorder: moves a task to an index, optionally into another phase of the same project. security definer — validates admin/membership itself so providers can reorder despite per-row RLS.';
+  'Drag-and-drop reorder: moves a task to an index, optionally into another phase of the same project. security definer — validates admin/membership itself so providers can reorder despite per-row RLS. Migration 018 restricts the client role to tasks they created and pins search_path.';
 
 -- =============================================================================
 -- DONE

@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { Resend } from 'resend'
 import { createClient } from '@/lib/supabase/server'
+import { getSiteUrl } from '@/lib/site-url'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -42,7 +43,7 @@ async function sendApprovalEmail(email: string, name: string) {
   }
   try {
     const resend = new Resend(apiKey)
-    const portalUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+    const portalUrl = getSiteUrl()
     const { error } = await resend.emails.send({
       from: process.env.RESEND_FROM ?? 'Weblikha Portal <onboarding@resend.dev>',
       to: email,

@@ -1,35 +1,34 @@
-'use client'
 /**
  * LOGIN PAGE
  * ─────────────────────────────────────────────────────────────────────────────
- * Google OAuth via Supabase — one click, no password needed.
+ * Server Component — reads the status params the auth routes redirect back
+ * with, then hands off to the client form.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import type { Metadata } from 'next'
+import { LoginForm } from '@/components/modules/auth/LoginForm'
 
-export default function LoginPage() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export const metadata: Metadata = { title: 'Sign in' }
 
-  async function handleGoogleSignIn() {
-    setLoading(true)
-    setError(null)
+/** Friendly text for the codes the auth routes redirect back with. */
+const ERROR_COPY: Record<string, string> = {
+  missing_code:    'That sign-in link was incomplete. Ask for a new one below.',
+  callback_failed: 'That sign-in link has expired or was already used. Ask for a new one below.',
+  missing_email:   'Enter your email address first.',
+  send_failed:     'We could not send that email. Try again in a moment.',
+  profile_missing: 'Your account exists but has no profile yet. Contact your admin.',
+  invite_expired:
+    'That invite link has already been used. Some company email filters open links automatically — enter your email below and we will send a fresh one.',
+}
 
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-    }
-    // On success Supabase redirects the browser — no need to handle here
-  }
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; sent?: string }>
+}) {
+  const params = await searchParams
+  const errorCopy = params.error ? ERROR_COPY[params.error] ?? 'Something went wrong. Try again.' : null
+  const sent = params.sent === '1'
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg-base p-4">
@@ -48,35 +47,32 @@ export default function LoginPage() {
         <div className="card p-6">
           <h1 className="mb-1 text-xl">Sign in</h1>
           <p className="mb-6 text-xs text-secondary">
-            Use your Google account to access the portal.
+            Team members can use Google. Clients, use the email and password you set up.
           </p>
 
-          {error && (
-            <div className="mb-4 rounded-md bg-danger/10 border border-danger/30 px-3 py-2 text-xs text-danger">
-              {error}
+          {sent && (
+            <div
+              role="status"
+              className="mb-4 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-xs text-success"
+            >
+              Check your inbox — we sent you a sign-in link.
             </div>
           )}
 
-          <button
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            className="flex h-10 w-full items-center justify-center gap-3 rounded-md border border-[var(--color-border-default)] bg-bg-surface-2 text-sm font-medium text-primary transition-colors hover:bg-bg-surface-3 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {/* Google icon */}
-            {!loading && (
-              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-                <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-                <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
-                <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
-                <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z"/>
-              </svg>
-            )}
-            {loading ? 'Redirecting…' : 'Continue with Google'}
-          </button>
+          {errorCopy && (
+            <div
+              role="alert"
+              className="mb-4 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger"
+            >
+              {errorCopy}
+            </div>
+          )}
+
+          <LoginForm />
         </div>
 
         <p className="mt-4 text-center text-2xs text-tertiary">
-          Access is limited to authorized team members.
+          Access is limited to authorized team members and invited clients.
         </p>
       </div>
     </div>

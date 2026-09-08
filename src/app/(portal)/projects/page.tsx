@@ -10,7 +10,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { ProjectCard } from '@/components/modules/projects/ProjectCard'
 import { NewProjectModal } from '@/components/modules/projects/NewProjectModal'
-import type { ProjectWithMembers, User } from '@/types'
+import type { ProjectWithMembers, ClientProjectWithMembers, User } from '@/types'
 import { FolderOpen } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Projects' }
@@ -25,9 +25,10 @@ export default async function ProjectsPage() {
     .eq('id', authUser!.id)
     .single()
 
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin  = profile?.role === 'admin'
+  const isClient = profile?.role === 'client'
 
-  let projects: ProjectWithMembers[]
+  let projects: (ProjectWithMembers | ClientProjectWithMembers)[]
 
   if (isAdmin) {
     const { data } = await supabase
@@ -43,7 +44,7 @@ export default async function ProjectsPage() {
       .order('created_at', { ascending: false })
     projects = (data ?? []) as ProjectWithMembers[]
   } else {
-    // Provider: only projects they're a member of
+    // Provider or client: only projects they're a member of
     const { data: memberRows } = await supabase
       .from('project_members')
       .select('project_id')
@@ -53,8 +54,23 @@ export default async function ProjectsPage() {
 
     if (projectIds.length === 0) {
       projects = []
+    } else if (isClient) {
+      // Client: explicit column list mirroring the client_projects view —
+      // budget must never reach a client-role payload at all, not just go
+      // unrendered (RLS is row-level, so `select('*')` here would include
+      // it). See CLAUDE.md "Budget caveat".
+      const { data } = await supabase
+        .from('projects')
+        .select(`
+          id, name, client_name, status, start_date, end_date, description, created_at,
+          members: project_members(*, user: users(id, name, avatar_url, specialty, role))
+        `)
+        .in('id', projectIds)
+        .order('created_at', { ascending: false })
+
+      projects = (data ?? []) as ClientProjectWithMembers[]
     } else {
-      // Providers: no revenue_entries (admin-only RLS) in the embed
+      // Provider: no revenue_entries (admin-only RLS) in the embed
       const { data } = await supabase
         .from('projects')
         .select('*, members: project_members(*, user: users(id, name, avatar_url, specialty, role))')

@@ -13,7 +13,7 @@ import { ProjectTabsLayout } from '@/components/modules/projects/ProjectTabsLayo
 import { formatDate, formatPeso } from '@/lib/utils'
 import { ChevronRight, CalendarDays, Wallet } from 'lucide-react'
 import type {
-  ProjectDetail, TaskListWithTasks, MessageWithAuthor, User, ProjectTemplate,
+  ProjectDetail, ProjectSummary, TaskListWithTasks, MessageWithAuthor, User, ProjectTemplate,
 } from '@/types'
 
 interface Props {
@@ -35,16 +35,29 @@ export default async function ProjectDetailPage({ params }: Props) {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   const { data: currentProfile } = await supabase
     .from('users').select('role').eq('id', authUser!.id).single()
-  const isAdmin = currentProfile?.role === 'admin'
+  const isAdmin  = currentProfile?.role === 'admin'
+  const isClient = currentProfile?.role === 'client'
 
-  // Project + members
-  const { data: project } = await supabase
-    .from('projects')
-    .select('*, members: project_members(*, user: users(*))')
-    .eq('id', id)
-    .single()
+  // Project + members. Client-role queries use an explicit column list that
+  // omits budget — RLS is row-level, so `select('*')` would hand a client
+  // the whole row including budget (see CLAUDE.md "Budget caveat"). The
+  // select string is kept literal per branch (not built at runtime) because
+  // supabase-js parses the select string at the type level.
+  const { data: projectRaw } = isClient
+    ? await supabase
+        .from('projects')
+        .select('id, name, client_name, status, start_date, end_date, description, created_at, members: project_members(*, user: users(*))')
+        .eq('id', id)
+        .single()
+    : await supabase
+        .from('projects')
+        .select('*, members: project_members(*, user: users(*))')
+        .eq('id', id)
+        .single()
 
-  if (!project) notFound()
+  if (!projectRaw) notFound()
+
+  const project = projectRaw as ProjectSummary & { members: ProjectDetail['members'] }
 
   // All approved providers (for TeamTab add-member picker)
   const { data: allProviders } = await supabase
@@ -107,10 +120,12 @@ export default async function ProjectDetailPage({ params }: Props) {
             <CalendarDays className="size-3.5 shrink-0 text-tertiary" />
             {formatDate(project.start_date)} → {formatDate(project.end_date)}
           </span>
-          <span className="flex items-center gap-1.5 whitespace-nowrap">
-            <Wallet className="size-3.5 shrink-0 text-tertiary" />
-            {formatPeso(project.budget)}
-          </span>
+          {project.budget !== undefined && (
+            <span className="flex items-center gap-1.5 whitespace-nowrap">
+              <Wallet className="size-3.5 shrink-0 text-tertiary" />
+              {formatPeso(project.budget)}
+            </span>
+          )}
         </div>
       </div>
 

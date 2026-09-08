@@ -1,10 +1,10 @@
 import Link from 'next/link'
 import { Avatar, Badge } from '@/components/ui'
 import { formatDate, formatPeso } from '@/lib/utils'
-import type { ProjectWithMembers } from '@/types'
+import type { ProjectCardData } from '@/types'
 
 interface ProjectCardProps {
-  project: ProjectWithMembers
+  project: ProjectCardData
 }
 
 export function ProjectCard({ project }: ProjectCardProps) {
@@ -55,11 +55,14 @@ export function ProjectCard({ project }: ProjectCardProps) {
           )}
         </div>
 
-        {/* Budget */}
-        <div className="text-right">
-          <p className="text-2xs text-tertiary">Budget</p>
-          <p className="text-xs font-medium text-primary">{formatPeso(project.budget)}</p>
-        </div>
+        {/* Budget — omitted entirely for client-role fetches (project.budget
+            is never selected for a client, not just hidden here) */}
+        {project.budget !== undefined && (
+          <div className="text-right">
+            <p className="text-2xs text-tertiary">Budget</p>
+            <p className="text-xs font-medium text-primary">{formatPeso(project.budget)}</p>
+          </div>
+        )}
       </div>
     </Link>
   )

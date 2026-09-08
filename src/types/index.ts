@@ -161,6 +161,29 @@ export interface ProjectWithMembers extends Project {
   revenue_entries: RevenueEntry[]
 }
 
+/** ClientProject with its members — the shape a client-role fetch of the
+ *  projects list/detail actually returns. Mirrors ProjectWithMembers minus
+ *  the columns a client query must never select (budget, created_by,
+ *  updated_at) — see CLAUDE.md "Budget caveat". */
+export type ClientProjectWithMembers = ClientProject & {
+  members: (ProjectMember & { user: User })[]
+}
+
+/** Minimal shape the project card/header needs to render. budget is
+ *  optional — honestly, not via `any` or an assertion — so a client-role
+ *  fetch (which never selects budget at all) can be passed here without
+ *  lying about having a column it doesn't. */
+export type ProjectSummary = Pick<
+  Project, 'id' | 'name' | 'client_name' | 'status' | 'start_date' | 'end_date' | 'description'
+> & {
+  budget?: number
+}
+
+/** ProjectSummary + members, as rendered by ProjectCard. */
+export type ProjectCardData = ProjectSummary & {
+  members: (ProjectMember & { user: User })[]
+}
+
 /** Task comment with its author user data */
 export interface TaskCommentWithAuthor extends TaskComment {
   author: User | null

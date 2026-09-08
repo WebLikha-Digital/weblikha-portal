@@ -152,11 +152,24 @@ alter table public.revenue_entries     enable row level security;
 
 -- Helper: is the current user an admin?
 -- SECURITY DEFINER ensures it runs as the table owner, not the caller.
+--
+-- NOTE — DELIBERATE BACK-PORT FROM MIGRATIONS 017 AND 018.
+-- `set search_path` was not in the original 001. It was added by 017 (as
+-- `= public`) and widened by 018 to the documented-safe `= public, pg_temp`.
+-- This file is applied by hand through the SQL Editor and advertised as
+-- re-runnable, so a re-run of the ORIGINAL text would have silently un-pinned
+-- that fix: a SECURITY DEFINER function resolving unqualified names — and
+-- operators and casts — through the CALLER's search_path, with no error and
+-- nothing visibly different. is_admin() backs almost every policy in the
+-- schema, so that is the worst possible function to leave unpinned.
+-- Kept in sync on purpose: any future change to this body must be made in
+-- BOTH places — here and in the migration that last touched it (017).
 create or replace function public.is_admin()
 returns boolean
 language sql
 security definer
 stable
+set search_path = public, pg_temp
 as $$
   select coalesce(
     (select role = 'admin' from public.users where id = auth.uid()),

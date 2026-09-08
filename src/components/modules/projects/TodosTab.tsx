@@ -205,6 +205,11 @@ export function TodosTab({
   // migrations 014/015/016), so these are role-derived, not just "not admin".
   // Phase creation: admin or client (RLS: "task_lists: client creates own").
   const canCreatePhases = isAdmin || isClient
+  // Task creation: admin or client (RLS: "tasks: admin inserts" and "tasks:
+  // client files own") — no INSERT policy exists for provider, so the "Add
+  // to-do" control must stay hidden for that role rather than offer an
+  // action RLS will reject.
+  const canCreateTasks  = isAdmin || isClient
 
   const [isPending, startTransition] = useTransition()
   const [optimisticLists, dispatch]  = useOptimistic(taskLists, optimisticReducer)
@@ -428,7 +433,7 @@ export function TodosTab({
   async function handleDeletePhase(taskListId: string) {
     const ok = await confirmDialog({
       title:   'Delete this phase?',
-      message: 'All of its tasks, comments, and attachments will be deleted.',
+      message: 'The phase will be deleted, but its to-dos are not — they\'ll just no longer be grouped under a phase, so they won\'t appear in this list.',
     })
     if (!ok) return
     startTransition(async () => {
@@ -781,7 +786,7 @@ export function TodosTab({
                           </SortableContext>
                         )}
 
-                        {addingTaskTo === list.id ? (
+                        {canCreateTasks && (addingTaskTo === list.id ? (
                           <div className="px-4 py-3 border-t border-subtle space-y-2 bg-bg-surface-2">
                             <input
                               autoFocus
@@ -845,7 +850,7 @@ export function TodosTab({
                           >
                             <Plus className="size-3.5" /> Add to-do
                           </button>
-                        )}
+                        ))}
                       </>
                     )}
                   </>

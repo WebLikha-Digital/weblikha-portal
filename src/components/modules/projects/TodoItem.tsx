@@ -286,6 +286,7 @@ export function TodoItem({
           disabled={isOptTemp || !canToggleStatus}
           className="shrink-0 text-tertiary hover:text-success transition-colors disabled:cursor-default disabled:hover:text-tertiary"
           title={canToggleStatus ? STATUS_HINT[task.status] : undefined}
+          aria-label={canToggleStatus ? STATUS_HINT[task.status] : "Only the team can change a to-do's status"}
         >
           {isDone
             ? <CheckCircle2 className="size-4 text-success" />

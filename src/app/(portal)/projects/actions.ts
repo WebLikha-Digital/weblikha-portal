@@ -125,9 +125,16 @@ export async function renameTaskList(taskListId: string, projectId: string, name
   const trimmed = name.trim()
   if (!trimmed) throw new Error('Phase name cannot be empty.')
 
-  const { error } = await supabase
-    .from('task_lists').update({ name: trimmed }).eq('id', taskListId)
+  // An RLS USING mismatch (e.g. a provider, or a client renaming a phase
+  // they didn't create) matches zero rows and returns error: null — it does
+  // not throw. .select('id') lets us tell "matched nothing" apart from
+  // "succeeded" so the mutation never completes silently.
+  const { data, error } = await supabase
+    .from('task_lists').update({ name: trimmed }).eq('id', taskListId).select('id')
   if (error) throw new Error(error.message)
+  if (!data || data.length === 0) {
+    throw new Error('You do not have permission to rename this phase.')
+  }
   revalidatePath(`/projects/${projectId}`)
 }
 
@@ -188,16 +195,22 @@ export async function deleteTaskList(taskListId: string, projectId: string) {
     .from('users').select('role').eq('id', user.id).single()
 
   if (profile?.role === 'client') {
-    const { data: tasks } = await supabase
+    const { data: tasks, error: tasksError } = await supabase
       .from('tasks').select('created_by').eq('task_list_id', taskListId)
+    if (tasksError) throw new Error(tasksError.message)
     const hasForeignTask = (tasks ?? []).some(t => t.created_by !== user.id)
     if (hasForeignTask) {
       throw new Error('This phase has to-dos you did not file — ask an admin to delete it.')
     }
   }
 
-  const { error } = await supabase.from('task_lists').delete().eq('id', taskListId)
+  // Same silent-failure guard as renameTaskList: an RLS mismatch deletes
+  // zero rows without an error, so check what actually matched.
+  const { data, error } = await supabase.from('task_lists').delete().eq('id', taskListId).select('id')
   if (error) throw new Error(error.message)
+  if (!data || data.length === 0) {
+    throw new Error('You do not have permission to delete this phase.')
+  }
   revalidatePath(`/projects/${projectId}`)
 }
 
@@ -604,7 +617,7 @@ export async function applyTemplate(projectId: string, templateId: string) {
   for (const tList of sortedLists) {
     const { data: newList, error: lErr } = await supabase
       .from('task_lists')
-      .insert({ project_id: projectId, name: tList.name, position: positionOffset++ })
+      .insert({ project_id: projectId, name: tList.name, position: positionOffset++, created_by: user.id })
       .select('id')
       .single()
 
@@ -627,6 +640,7 @@ export async function applyTemplate(projectId: string, templateId: string) {
           due_date:     dueDateStr,
           points_value: t.points_value ?? 60,
           status:       'pending',
+          created_by:   user.id,
         }))
       )
     }

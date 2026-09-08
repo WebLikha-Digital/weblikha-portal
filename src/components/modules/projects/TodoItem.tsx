@@ -28,7 +28,7 @@ import { CommentBody } from '@/components/modules/projects/CommentBody'
 import { withToast } from '@/components/ui/toast'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 import type {
-  TaskWithMeta, TaskStatus, TaskCommentWithAuthor, ProjectMember, User,
+  TaskWithMeta, TaskStatus, TaskCommentWithAuthor, ProjectMember, User, UserRole,
 } from '@/types'
 
 export interface TaskEditPatch {
@@ -58,7 +58,8 @@ interface TodoItemProps {
   listId:        string
   projectId:    string
   members:       (ProjectMember & { user: User })[]
-  isAdmin:       boolean
+  /** Full viewer role — capabilities below are derived from this, not a single admin flag. */
+  viewerRole:    UserRole
   currentUserId: string
   onToggle:      (listId: string, taskId: string, next: TaskStatus) => void
   onEdit:        (listId: string, taskId: string, patch: TaskEditPatch) => void
@@ -105,7 +106,7 @@ export function TodoItem({
   listId,
   projectId,
   members,
-  isAdmin,
+  viewerRole,
   currentUserId,
   onToggle,
   onEdit,
@@ -127,18 +128,46 @@ export function TodoItem({
   const [editAssigneeId,  setEditAssigneeId]  = useState(task.assignee_id ?? '')
   const [editPoints,      setEditPoints]      = useState(String(task.points_value))
 
+  // Gates that are genuinely admin-only keep reading this exactly as before.
+  const isAdmin  = viewerRole === 'admin'
+  const isClient = viewerRole === 'client'
+
   const isDone     = task.status === 'done'
   const inProgress = task.status === 'in_progress'
   const overdue    = !isDone && Boolean(task.due_date) && isOverdue(task.due_date)
   const isOptTemp = task.id.startsWith('temp-')
-  const canEdit   = !isOptTemp && (isAdmin || task.assignee_id === currentUserId)
-  const canClaim  = !isOptTemp && !isAdmin && !task.assignee_id &&
+
+  // Ownership: a null creator (pre-migration-014 task) is never "owned" by
+  // the current client — do not let null coerce to a match. Matches RLS
+  // ("tasks: client edits own pending" / "client deletes own pending").
+  const isOwnPendingTask = task.created_by !== null && task.created_by === currentUserId &&
+                           task.status === 'pending'
+
+  // Providers keep the existing assignee-based edit rule untouched; clients
+  // get an ownership-based rule instead (RLS grants clients nothing via the
+  // assignee policy — migration 015 explicitly excludes the client role
+  // from "tasks: assignee updates status").
+  const canEditTask   = !isOptTemp && (
+    isAdmin || (isClient ? isOwnPendingTask : task.assignee_id === currentUserId)
+  )
+  const canDeleteTask = !isOptTemp && (isAdmin || (isClient && isOwnPendingTask))
+
+  // Self-claim on unassigned tasks is provider-only (migration 014 narrowed
+  // "tasks: member claims unassigned" to "tasks: provider claims unassigned"
+  // specifically so a client project member could not claim team work).
+  const canClaim  = !isOptTemp && viewerRole === 'provider' && !task.assignee_id &&
                     members.some(m => m.user_id === currentUserId)
+
+  // Clients can never mark a task done — RLS excludes the client role from
+  // the only status-changing policy, so this keeps the UI from offering an
+  // action the server will reject.
+  const canToggleStatus = !isClient
 
   const currentUser = members.find(m => m.user_id === currentUserId)?.user ?? null
 
-  // Providers can only assign to themselves; admins can assign anyone
-  const assignableMembers = isAdmin
+  // Providers can only assign to themselves; admins and clients (on tasks
+  // they're entitled to edit) can assign to anyone already on the project.
+  const assignableMembers = (isAdmin || isClient)
     ? members
     : members.filter(m => m.user_id === currentUserId)
 
@@ -251,10 +280,12 @@ export function TodoItem({
         )}
 
         <button
-          onClick={() => { if (!isOptTemp) onToggle(listId, task.id, NEXT_STATUS[task.status]) }}
-          disabled={isOptTemp}
-          className="shrink-0 text-tertiary hover:text-success transition-colors disabled:cursor-default"
-          title={STATUS_HINT[task.status]}
+          onClick={() => {
+            if (!isOptTemp && canToggleStatus) onToggle(listId, task.id, NEXT_STATUS[task.status])
+          }}
+          disabled={isOptTemp || !canToggleStatus}
+          className="shrink-0 text-tertiary hover:text-success transition-colors disabled:cursor-default disabled:hover:text-tertiary"
+          title={canToggleStatus ? STATUS_HINT[task.status] : undefined}
         >
           {isDone
             ? <CheckCircle2 className="size-4 text-success" />
@@ -345,7 +376,7 @@ export function TodoItem({
 
         {/* Edit + delete — pushed to the right edge on mobile */}
         <div className="flex items-center gap-1 ml-auto sm:ml-0">
-          {canEdit && (
+          {canEditTask && (
             <button
               onClick={() => (editing ? setEditing(false) : openEdit())}
               className="p-1 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
@@ -355,7 +386,7 @@ export function TodoItem({
             </button>
           )}
 
-          {isAdmin && !isOptTemp && (
+          {canDeleteTask && (
             <button
               onClick={() => onDelete(listId, task.id)}
               className="p-1 rounded text-tertiary hover:text-danger transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"

@@ -14,6 +14,7 @@ import { formatDate, formatPeso } from '@/lib/utils'
 import { ChevronRight, CalendarDays, Wallet } from 'lucide-react'
 import type {
   ProjectDetail, ProjectSummary, TaskListWithTasks, MessageWithAuthor, User, ProjectTemplate,
+  UserRole,
 } from '@/types'
 
 interface Props {
@@ -37,6 +38,9 @@ export default async function ProjectDetailPage({ params }: Props) {
     .from('users').select('role').eq('id', authUser!.id).single()
   const isAdmin  = currentProfile?.role === 'admin'
   const isClient = currentProfile?.role === 'client'
+  // Fallback matches the pre-existing implicit behaviour: an unresolved
+  // profile was already treated as "not admin, not client" (i.e. provider-like).
+  const viewerRole: UserRole = (currentProfile?.role as UserRole | undefined) ?? 'provider'
 
   // Project + members. Client-role queries use an explicit column list that
   // omits budget — RLS is row-level, so `select('*')` would hand a client
@@ -139,6 +143,7 @@ export default async function ProjectDetailPage({ params }: Props) {
         availableMembers={availableMembers}
         templates={templates}
         isAdmin={isAdmin}
+        viewerRole={viewerRole}
       />
     </div>
   )

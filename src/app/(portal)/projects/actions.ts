@@ -98,23 +98,29 @@ export async function createTaskList(projectId: string, name: string) {
     .select('*', { count: 'exact', head: true })
     .eq('project_id', projectId)
 
+  // created_by drives the "Added by client" badge and — for the client role
+  // — is required by RLS ("task_lists: client creates own"). Admin inserts
+  // are unaffected by RLS but get an accurate creator either way.
   const { error } = await supabase.from('task_lists').insert({
     project_id: projectId,
     name:       name.trim(),
     position:   count ?? 0,
+    created_by: user.id,
   })
   if (error) throw new Error(error.message)
   revalidatePath(`/projects/${projectId}`)
 }
 
+/**
+ * Admins rename any phase; clients may rename a phase they created (RLS
+ * "task_lists: client renames own"). No manual role gate here — RLS is the
+ * boundary, matching createTaskList's existing pattern. A provider's update
+ * matches zero rows (no provider policy exists), so it fails safely.
+ */
 export async function renameTaskList(taskListId: string, projectId: string, name: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('users').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') throw new Error('Admin only.')
 
   const trimmed = name.trim()
   if (!trimmed) throw new Error('Phase name cannot be empty.')
@@ -164,6 +170,15 @@ export async function reorderTaskList(taskListId: string, projectId: string, toI
   revalidatePath(`/projects/${projectId}`)
 }
 
+/**
+ * Admins delete any phase; clients may delete a phase they created (RLS
+ * "task_lists: client deletes own"). Deleting a phase nulls task_list_id on
+ * its tasks (migration 002) rather than cascading, so a client deleting a
+ * mixed phase would orphan team work — RLS only sees the task_lists row, not
+ * its tasks, so that guard has to live here (per migration 014's design
+ * note: "the delete server action additionally refuses when the phase holds
+ * any task the client did not file").
+ */
 export async function deleteTaskList(taskListId: string, projectId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -171,9 +186,18 @@ export async function deleteTaskList(taskListId: string, projectId: string) {
 
   const { data: profile } = await supabase
     .from('users').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') throw new Error('Admin only.')
 
-  await supabase.from('task_lists').delete().eq('id', taskListId)
+  if (profile?.role === 'client') {
+    const { data: tasks } = await supabase
+      .from('tasks').select('created_by').eq('task_list_id', taskListId)
+    const hasForeignTask = (tasks ?? []).some(t => t.created_by !== user.id)
+    if (hasForeignTask) {
+      throw new Error('This phase has to-dos you did not file — ask an admin to delete it.')
+    }
+  }
+
+  const { error } = await supabase.from('task_lists').delete().eq('id', taskListId)
+  if (error) throw new Error(error.message)
   revalidatePath(`/projects/${projectId}`)
 }
 
@@ -202,6 +226,10 @@ export async function createTask(formData: FormData) {
     .select('*', { count: 'exact', head: true })
     .eq('task_list_id', taskListId)
 
+  // created_by drives the "Added by client" badge and — for the client role
+  // — is required by RLS ("tasks: client files own"), which also pins
+  // points_value to 0 and status to 'pending' for that role regardless of
+  // what's posted here.
   const { error } = await supabase.from('tasks').insert({
     project_id:   projectId,
     task_list_id: taskListId,
@@ -212,6 +240,7 @@ export async function createTask(formData: FormData) {
     points_value: isNaN(pointsValue) ? 60 : pointsValue,
     status:       'pending',
     position:     count ?? 0,
+    created_by:   user.id,
   })
   if (error) throw new Error(error.message)
   revalidatePath(`/projects/${projectId}`)
@@ -247,15 +276,21 @@ export async function updateTask(
 
   const { data: profile } = await supabase
     .from('users').select('role').eq('id', user.id).single()
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin  = profile?.role === 'admin'
+  const isClient = profile?.role === 'client'
 
   const { data: task } = await supabase
-    .from('tasks').select('assignee_id').eq('id', taskId).single()
+    .from('tasks').select('assignee_id, created_by, status').eq('id', taskId).single()
   if (!task) throw new Error('Task not found.')
 
   const isAssignee = task.assignee_id === user.id
-  if (!isAdmin && !isAssignee) {
-    throw new Error('Only admins or the assignee can edit this task.')
+  // A client edits only a task they filed, and only while it's pending —
+  // mirrors RLS ("tasks: client edits own pending"). Migration 015 excludes
+  // the client role from the assignee policy entirely, so isAssignee alone
+  // is never sufficient for a client.
+  const isOwner = isClient && task.created_by === user.id && task.status === 'pending'
+  if (!isAdmin && !isOwner && !(isAssignee && !isClient)) {
+    throw new Error('Only admins, the assignee, or the client who filed this to-do can edit it.')
   }
 
   const updates: Record<string, unknown> = {}
@@ -267,8 +302,10 @@ export async function updateTask(
   if (fields.description !== undefined) updates.description = fields.description
   if (fields.due_date !== undefined)    updates.due_date    = fields.due_date
   if (fields.assignee_id !== undefined) {
-    // Providers may only assign to themselves or unassign — never to someone else
-    if (!isAdmin && fields.assignee_id !== null && fields.assignee_id !== user.id) {
+    // Providers may only assign to themselves or unassign — never to someone
+    // else. Admins and a client editing their own pending to-do may assign
+    // to anyone already on the project (RLS: is_member_of checks the rest).
+    if (!isAdmin && !isOwner && fields.assignee_id !== null && fields.assignee_id !== user.id) {
       throw new Error('You can only assign this task to yourself.')
     }
     updates.assignee_id = fields.assignee_id
@@ -353,21 +390,26 @@ function extractAttachmentPaths(bodies: string[]): string[] {
   return Array.from(paths)
 }
 
+/**
+ * Admins delete any task; clients may delete a task they filed while it's
+ * still pending (RLS "tasks: client deletes own pending"). Providers get no
+ * delete path, same as before this task.
+ */
 export async function deleteTask(taskId: string, projectId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('users').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') throw new Error('Admin only.')
 
   // Collect attachment paths before comments cascade-delete
   const { data: comments } = await supabase
     .from('task_comments').select('body').eq('task_id', taskId)
   const paths = extractAttachmentPaths((comments ?? []).map(c => c.body))
 
-  await supabase.from('tasks').delete().eq('id', taskId)
+  const { data, error } = await supabase.from('tasks').delete().eq('id', taskId).select('id')
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) {
+    throw new Error('Could not delete this to-do.')
+  }
 
   // Best-effort image cleanup — a failure here shouldn't block the delete
   if (paths.length > 0) {

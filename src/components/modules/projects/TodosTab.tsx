@@ -35,7 +35,7 @@ import { TodoItem, type TaskEditPatch } from '@/components/modules/projects/Todo
 import { withToast } from '@/components/ui/toast'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 import type {
-  TaskListWithTasks, TaskWithMeta, ProjectMember, User, ProjectTemplate, TaskStatus,
+  TaskListWithTasks, TaskWithMeta, ProjectMember, User, ProjectTemplate, TaskStatus, UserRole,
 } from '@/types'
 
 interface TodosTabProps {
@@ -44,7 +44,8 @@ interface TodosTabProps {
   currentUserId: string
   members:       (ProjectMember & { user: User })[]
   templates:     ProjectTemplate[]
-  isAdmin:       boolean
+  /** Full viewer role — capabilities below are derived from this, not a single admin flag. */
+  viewerRole:    UserRole
 }
 
 type OptimisticAction =
@@ -194,8 +195,17 @@ export function TodosTab({
   currentUserId,
   members,
   templates,
-  isAdmin,
+  viewerRole,
 }: TodosTabProps) {
+  // Gates that are genuinely admin-only keep reading this exactly as before.
+  const isAdmin  = viewerRole === 'admin'
+  const isClient = viewerRole === 'client'
+
+  // Named capabilities — clients get real, RLS-backed abilities here (see
+  // migrations 014/015/016), so these are role-derived, not just "not admin".
+  // Phase creation: admin or client (RLS: "task_lists: client creates own").
+  const canCreatePhases = isAdmin || isClient
+
   const [isPending, startTransition] = useTransition()
   const [optimisticLists, dispatch]  = useOptimistic(taskLists, optimisticReducer)
 
@@ -297,6 +307,10 @@ export function TodosTab({
     const assignee = members.find(m => m.user_id === taskAssigneeId)?.user ?? null
     const listLength = optimisticLists.find(l => l.id === taskListId)?.tasks.length ?? 0
     const self = members.find(m => m.user_id === currentUserId)?.user ?? null
+    // Client-filed tasks are worth 0 points until an admin triages them —
+    // mirrors the guard_task_points_value trigger (migration 016), which
+    // rejects a client insert at any other value.
+    const pointsValue = isClient ? 0 : 60
     const optimisticTask: TaskWithMeta = {
       id:           `temp-${Date.now()}`,
       project_id:   projectId,
@@ -307,7 +321,7 @@ export function TodosTab({
       status:       'pending',
       due_date:     taskDueDate,
       completed_at: null,
-      points_value: 60,
+      points_value: pointsValue,
       position:     listLength,
       created_by:   currentUserId,
       created_at:   new Date().toISOString(),
@@ -323,7 +337,7 @@ export function TodosTab({
     if (taskDescription.trim()) fd.set('description', taskDescription.trim())
     fd.set('due_date',     taskDueDate)
     if (taskAssigneeId) fd.set('assignee_id', taskAssigneeId)
-    fd.set('points_value', '60')
+    fd.set('points_value', String(pointsValue))
     setTaskTitle('')
     setTaskDescription('')
     setTaskDueDate('')
@@ -542,15 +556,17 @@ export function TodosTab({
         <CheckCircle2 className="size-8 text-tertiary mb-3" />
         <p className="text-primary font-medium">No phases yet</p>
         <p className="text-sm text-secondary mt-1">Add a phase to start tracking work.</p>
-        {isAdmin && (
+        {canCreatePhases && (
           <div className="mt-4 flex items-center gap-2">
-            {templates.length > 0 && TemplateDropdown}
-            <button
-              onClick={() => setAddingPhase(true)}
-              className="flex items-center gap-2 h-8 px-3 rounded-md border border-subtle text-sm text-secondary hover:text-primary hover:border-[var(--color-border-default)] transition-colors"
-            >
-              <Plus className="size-3.5" /> New phase
-            </button>
+            {isAdmin && templates.length > 0 && TemplateDropdown}
+            {canCreatePhases && (
+              <button
+                onClick={() => setAddingPhase(true)}
+                className="flex items-center gap-2 h-8 px-3 rounded-md border border-subtle text-sm text-secondary hover:text-primary hover:border-[var(--color-border-default)] transition-colors"
+              >
+                <Plus className="size-3.5" /> New phase
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -596,9 +612,9 @@ export function TodosTab({
           </>
         )}
 
-        {isAdmin && (
+        {canCreatePhases && (
           <div className="ml-auto flex items-center gap-2">
-            {templates.length > 0 && TemplateDropdown}
+            {isAdmin && templates.length > 0 && TemplateDropdown}
             <button
               onClick={() => setAddingPhase(true)}
               disabled={isPending}
@@ -630,6 +646,11 @@ export function TodosTab({
             const isRenaming   = renamingPhaseId === list.id
             // While filtering, collapse state is ignored so matches stay visible
             const isCollapsed  = collapsed.has(list.id) && !filtersActive
+
+            // Ownership: a null creator (pre-migration-014 phase) is never
+            // "owned" by the current client — do not let null coerce to a match.
+            const isOwnPhase    = list.created_by !== null && list.created_by === currentUserId
+            const canManagePhase = isAdmin || (isClient && isOwnPhase)
 
             // Hide phases with no matching tasks while filtering
             if (filtersActive && visibleTasks.length === 0) return null
@@ -695,7 +716,7 @@ export function TodosTab({
                                 Saving…
                               </span>
                             )}
-                            {isAdmin && !isTemp && (
+                            {canManagePhase && !isTemp && (
                               <button
                                 onClick={() => { setRenamingPhaseId(list.id); setRenameValue(list.name) }}
                                 className="p-1 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover/phase:opacity-100"
@@ -720,7 +741,7 @@ export function TodosTab({
                             <span className="text-2xs text-secondary">{done}/{total}</span>
                           </>
                         )}
-                        {isAdmin && !isTemp && (
+                        {canManagePhase && !isTemp && (
                           <button
                             onClick={() => handleDeletePhase(list.id)}
                             className="p-1 rounded text-tertiary hover:text-danger transition-colors"
@@ -747,7 +768,7 @@ export function TodosTab({
                                   listId={list.id}
                                   projectId={projectId}
                                   members={members}
-                                  isAdmin={isAdmin}
+                                  viewerRole={viewerRole}
                                   currentUserId={currentUserId}
                                   onToggle={handleToggleStatus}
                                   onEdit={handleEditTask}
@@ -893,7 +914,7 @@ export function TodosTab({
         </div>
       )}
 
-      {isAdmin && !addingPhase && optimisticLists.length > 0 && (
+      {canCreatePhases && !addingPhase && optimisticLists.length > 0 && (
         <button
           onClick={() => setAddingPhase(true)}
           className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-tertiary hover:text-secondary border border-dashed border-subtle rounded-lg transition-colors"

@@ -19,6 +19,10 @@ const ERROR_COPY: Record<string, string> = {
   profile_missing: 'Your account exists but has no profile yet. Contact your admin.',
   invite_expired:
     'That invite link has already been used. Some company email filters open links automatically — enter your email below and we will send a fresh one.',
+  // Not the recipient's fault, so this one does not tell them to ask for a new
+  // link — a fresh one built from the same template would fail identically.
+  link_misconfigured:
+    'That link was not built correctly, so we could not sign you in. This is a setup problem on our side, not something you did — please let your Weblikha contact know.',
 }
 
 export default async function LoginPage({

@@ -52,6 +52,23 @@ export async function GET(request: Request) {
   const type      = searchParams.get('type')
   const next      = safeNextPath(searchParams.get('next'))
 
+  // Neither param present at all means this request did not come from a
+  // {{ .TokenHash }} template. It is the fingerprint of Supabase's DEFAULT
+  // template: that one sends the user to /auth/v1/verify, which consumes the
+  // token itself and then bounces here with the session in the URL fragment
+  // and no query params. Worth its own error code, because "the template was
+  // never updated" and "this link is genuinely spent" are the same screen
+  // otherwise — and blaming the recipient's mail filter for a dashboard
+  // misconfiguration costs an invite and an afternoon.
+  if (!tokenHash && type === null) {
+    console.error(
+      '[auth/confirm] no token_hash and no type — the Supabase email template is '
+      + 'almost certainly still the default {{ .ConfirmationURL }}. See '
+      + 'docs/client-invite-email-templates.md.',
+    )
+    return NextResponse.redirect(`${origin}/login?error=link_misconfigured`)
+  }
+
   if (!tokenHash || !isAllowedOtpType(type)) {
     console.error(
       '[auth/confirm] missing or unsupported params',

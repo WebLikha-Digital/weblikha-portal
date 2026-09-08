@@ -88,6 +88,10 @@ create or replace function public.award_task_points()
 returns trigger
 language plpgsql
 security definer
+-- Back-ported from 018. Kept here so a re-run of 014 does not un-pin it.
+-- A SECURITY DEFINER function without a fixed search_path resolves unqualified
+-- names against the caller's schema list, which is a privilege-escalation vector.
+set search_path = public, pg_temp
 as $$
 declare
   v_month integer;
@@ -267,6 +271,9 @@ create policy "tasks: client deletes own pending"
     public.get_user_role() = 'client'
     and created_by = auth.uid()
     and status     = 'pending'
+    -- Back-ported from 018. Kept here so a re-run of 014 does not revert it.
+    -- See the matching note on "task_lists: client deletes own" below.
+    and public.is_project_member(project_id)
   );
 
 -- ── Task lists (phases) ──────────────────────────────────────────────────────
@@ -304,6 +311,11 @@ create policy "task_lists: client deletes own"
   using (
     public.get_user_role() = 'client'
     and created_by = auth.uid()
+    -- Back-ported from 018. Kept here so a re-run of 014 does not revert it.
+    -- Revoking a client deletes their project_members rows rather than
+    -- flipping a flag, so without this a revoked client with a live session
+    -- could still delete phases they authored.
+    and public.is_project_member(project_id)
   );
 
 -- ── Messages ─────────────────────────────────────────────────────────────────

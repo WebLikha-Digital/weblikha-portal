@@ -1,7 +1,8 @@
 /**
  * SUPABASE ADMIN CLIENT (SERVICE ROLE)
  * ─────────────────────────────────────────────────────────────────────────────
- * Bypasses Row Level Security. Use ONLY in Server Actions and Route Handlers,
+ * Bypasses Row Level Security. Use ONLY in Server Actions, Route Handlers, and
+ * admin-guarded Server Components (see (portal)/clients/setup-state.ts),
  * and only for operations that genuinely cannot be done as the signed-in user:
  * inviting an auth user, and promoting that user to the `client` role.
  *

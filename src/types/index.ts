@@ -56,6 +56,23 @@ export interface Project {
  */
 export type ClientProject = Omit<Project, 'budget' | 'created_by' | 'updated_at'>
 
+// ── Client admin page (derived, not DB-backed) ────────────────────────────────
+
+/** Where a client is in onboarding. Derived in clients/page.tsx — see
+ *  setup-state.ts for why this is read from auth.users rather than stored. */
+export type ClientSetupStatus = 'active' | 'invite_pending' | 'revoked'
+
+/** The project shape the assignment pickers need — no budget, no description. */
+export type PickerProject = Pick<Project, 'id' | 'name' | 'status'>
+
+/** One row of the /clients table, assembled server-side so the client
+ *  component never has to join memberships to projects itself. */
+export interface ClientRow {
+  user:     User
+  projects: PickerProject[]
+  status:   ClientSetupStatus
+}
+
 export interface ProjectMember {
   id:               string
   project_id:       string

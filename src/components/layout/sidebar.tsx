@@ -26,6 +26,7 @@ import {
   Trophy,
   PanelLeftClose,
   PanelLeftOpen,
+  UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui'
@@ -38,6 +39,7 @@ const ADMIN_NAV = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Projects',  href: '/projects',  icon: Folder },
   { label: 'Team',      href: '/team',      icon: Users },
+  { label: 'Clients',   href: '/clients',   icon: UserPlus },
   { label: 'Revenue',   href: '/revenue',   icon: BarChart3 },
 ] as const
 

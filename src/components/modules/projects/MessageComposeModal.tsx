@@ -67,7 +67,7 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const problem = messageDraftError({ title, body })
+    const problem = messageDraftError({ title, bodyHtml: body, mentions: [], categoryId: null })
     if (problem) {
       setError(problem)
       return
@@ -80,13 +80,20 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
           const shared = isClient || clientVisible
           const id = await createMessage(props.projectId, {
             title,
-            body,
+            bodyHtml:        body,
+            mentions:        [],
+            categoryId:      null,
             isClientVisible: shared,
           })
           toast.success(shared ? 'Message posted.' : 'Posted internally.')
           props.onPosted(id)
         } else {
-          await updateMessage(props.message.id, props.projectId, { title, body })
+          await updateMessage(props.message.id, props.projectId, {
+            title,
+            bodyHtml:   body,
+            mentions:   [],
+            categoryId: props.message.category_id,
+          })
           toast.success('Message updated.')
           props.onSaved()
         }

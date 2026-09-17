@@ -1805,6 +1805,8 @@ Expected: the first `migration list` shows only 020 unapplied; the last shows 00
 9. Revoke a client, then as that client delete an old post via the API → rejected.
 10. At 375px width, both modals are full-width with no horizontal scroll.
 
-- [ ] **Step 8 (Matthew): Apply to prod after the PR merges**
+- [ ] **Step 8 (Matthew): Apply to prod BEFORE merging the PR**
 
-Same commands as step 6 with the prod URL (masked URL must show `vhsuyouczctnkvnnjzgg`). Merge first: the new UI reads `notifications.message_id`, which must exist in prod before the deploy is exercised — apply 020 promptly after the merge.
+Same commands as step 6 with the prod URL (masked URL must show `vhsuyouczctnkvnnjzgg`). **Apply 020 to prod first, then merge.** The new bell query embeds `messages` through `notifications.message_id`; deployed against a database without 020, that query errors and every user's notification dropdown renders empty. The reverse order is safe: 020 is additive, and the currently deployed code never touches what it adds (the old Messages tab is read-only, and no client-post UI exists to fire the new trigger).
+
+*(Corrected during execution: this step originally said to merge first. The Task 6 review found the empty-bell window.)*

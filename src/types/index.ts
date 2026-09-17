@@ -328,6 +328,7 @@ export interface AppNotification {
   project_id: string
   task_id:    string | null
   comment_id: string | null
+  message_id: string | null   // Set for client_message notifications (migration 020)
   read_at:    string | null
   created_at: string
 }

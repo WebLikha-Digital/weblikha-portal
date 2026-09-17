@@ -2,7 +2,7 @@
  * PROJECT DETAIL PAGE
  * Shows a single project's header + tabbed content (to-dos, messages, team).
  * To-dos include per-task comment threads (task_comments).
- * Tab switching is handled client-side in ProjectTabsLayout — no URL params needed.
+ * Tab switching is handled client-side in ProjectTabsLayout, driven by ?tab= (and ?message= for the message board).
  */
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'

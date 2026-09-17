@@ -377,10 +377,28 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
     the trigger, so it is a read-only page (point history, monthly total, progress toward the
     1,000-pt threshold) plus an admin bonus/deduction control.
 
+### Raised by the 021 review pass (2026-09-18), deliberately deferred
+
+18. **`comment-attachments` storage policies are bucket-wide** (`009`): any authenticated
+    user may INSERT at any path and the whole bucket is publicly readable, with no cleanup
+    when a comment or message is deleted. Unchanged since 009, but the blast radius grew
+    when message images started using the same bucket (`messages/${projectId}/…`). A fix
+    scopes the insert policy to paths the caller is authorised for, or moves to signed URLs.
+19. **The toolbar's link button uses native `prompt()`** (`RichTextEditor.tsx`), carried over
+    from the pre-split comment editor — the same class of thing `confirmDialog` replaced.
+    Wants a small inline link form.
+20. **Mention dedup depends on trigger-name order.** `messages_notify_client_message` sorts
+    before `messages_notify_mentions`, which is what stops a client's post double-notifying a
+    mentioned teammate. Renaming either trigger silently reintroduces duplicates; documented
+    in 021's comments, with no test to catch it.
+21. **`notifications_type_check` is now `NOT VALID`** (021) so applying it takes no full-table
+    lock. Existing rows already satisfy the widened list; run `validate constraint` off-peak
+    if you want it marked valid.
+
 ### Repo hygiene
 
-18. **`tsconfig.tsbuildinfo` is tracked** — a build artifact that dirties the tree on every
+22. **`tsconfig.tsbuildinfo` is tracked** — a build artifact that dirties the tree on every
     build. Wants a `.gitignore` entry plus `git rm --cached`.
-19. **No test framework at all.** Every change this session was gated on `npx tsc --noEmit`,
+23. **No test framework at all.** Every change this session was gated on `npx tsc --noEmit`,
     review, and manual checks. Adding one is a real decision that has never been made — not
     something to bolt on mid-feature.

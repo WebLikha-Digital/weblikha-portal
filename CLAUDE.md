@@ -30,7 +30,7 @@ for exactly which stages are done.
 | Backend | Supabase (PostgreSQL + Auth + RLS), `@supabase/ssr` |
 | Server state | TanStack Query v5 (client) + Server Components/Server Actions |
 | Charts | Recharts |
-| Rich text | TipTap (StarterKit, Link, Image, Mention, Placeholder) — task comments |
+| Rich text | TipTap (StarterKit, Link, Image, Mention, Placeholder) — task comments and message board posts, via a shared `RichTextEditor`/`RichTextBody` |
 | Drag & drop | @dnd-kit (core, sortable, utilities) — task ordering |
 | Sanitization | dompurify — comment HTML |
 | Email | resend — approval notifications |
@@ -52,8 +52,9 @@ src/
 │   │   ├── layout.tsx       Checks auth + approval, fetches user, renders PortalShell
 │   │   ├── dashboard/       Eagle's eye view (KPI cards)
 │   │   ├── projects/        Project list + [id] detail (tabs: todos, messages, team)
-│   │   │   ├── actions.ts          Server Actions: tasks, comments, members, claim
-│   │   │   └── message-actions.ts  Server Actions: create/update/delete messages + push
+│   │   │   ├── actions.ts                   Server Actions: tasks, comments, members, claim
+│   │   │   ├── message-actions.ts           Server Actions: create/update/delete messages + push
+│   │   │   └── message-category-actions.ts  Server Actions: create/update/reorder/archive/restore categories
 │   │   ├── team/            Performance & leaderboard + members management
 │   │   │   └── actions.ts   Server Actions: admin points, member edits
 │   │   ├── clients/         Client management (admin only) — page pending, actions done
@@ -79,6 +80,7 @@ src/
 │   │   └── toast.tsx            toast() + host — NOT in barrel, import directly
 │   ├── layout/             PortalShell, sidebar, MobileNav, MobileTabBar, NotificationsBell
 │   └── modules/            Feature-specific components
+│       ├── editor/         RichTextEditor (shared TipTap field), RichTextBody (sanitised renderer)
 │       ├── projects/       ProjectCard, ProjectTabs(+Layout), TodosTab, TodoItem,
 │       │                   MessagesTab, TeamTab, CommentEditor, CommentBody, NewProjectModal
 │       ├── team/           TeamTabs, TeamPerformanceTable, MembersTab
@@ -147,7 +149,7 @@ Tailwind is configured to map those tokens to utility classes. Enforced by the
 ## Database schema
 
 Postgres on Supabase. All tables have Row Level Security enabled. Schema is built up
-across `supabase/migrations/001` → `020` (see the migration log below). The
+across `supabase/migrations/001` → `021` (see the migration log below). The
 authoritative TypeScript mirror is `src/types/index.ts` — update it whenever a column
 changes.
 
@@ -167,13 +169,16 @@ tasks               id, project_id, task_list_id, assignee_id (nullable → clai
                     completed_at, points_value (default 60; 0 for client-filed),
                     position, created_by
 task_comments       id, task_id, author_id, body (rich-text HTML), mentions uuid[], timestamps
-messages            id, project_id, author_id, title, body, is_client_visible, timestamps
+messages            id, project_id, author_id, title, body (rich-text HTML), is_client_visible,
+                    category_id, mentions uuid[], timestamps
+message_categories  id, name, emoji, position, archived_at, timestamps (agency-wide;
+                    admin-editable; archived not deleted)
 performance_periods user_id, period_month, period_year, task_points, deadline_points,
                     admin_points, total_points (generated), admin_note, timestamps
 revenue_entries     id, project_id, type (income|expense), amount, date, note
 notifications       id, user_id, actor_id, type (mention|task_assigned|client_task|
-                    client_message), project_id, task_id, comment_id, message_id,
-                    read_at, created_at
+                    client_message|message_mention), project_id, task_id, comment_id,
+                    message_id, read_at, created_at
 push_subscriptions  id, user_id, endpoint (unique), p256dh, auth, user_agent, timestamps
                     (one row per browser/device; owner-only RLS — server reads use
                     the service-role admin client in src/lib/supabase/admin.ts)
@@ -229,6 +234,8 @@ template_tasks          id, template_task_list_id, title, description, points_va
 017 read scope fixes         018 client delete + definer hardening
 019 web push subscriptions   020 message board (visibility lock, provider edit/delete,
                                  client_message notifications)
+021 message categories + mentions (message_categories, messages.category_id/mentions,
+    message_mention)
 ```
 
 **Why 019 is out of chronological order.** Web push shipped first but was numbered 014 on a
@@ -279,7 +286,9 @@ Threshold for loyalty incentive: **1,000 pts/month**. Admin views/overrides `adm
   **Visibility, project and author are locked after posting for every role** by a
   trigger (migration 020). A client post notifies approved admins and approved project
   providers via the `notify_client_message` trigger; `projects/message-actions.ts` pushes
-  to exactly those notification rows.
+  to exactly those notification rows. Categories are readable by any approved user and
+  editable only by admins. A @mention on an internal post never notifies a client
+  (notify_message_mentions).
 - Revenue table: **admin only** — providers and clients never see financial data
 - **Budget caveat:** RLS is row-level. The `projects: member or admin` policy hands any
   member the whole row including `budget`, so client screens must read `client_projects`.

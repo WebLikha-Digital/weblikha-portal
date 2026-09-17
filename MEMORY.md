@@ -46,6 +46,12 @@ switch. Visibility is locked after posting for every role (migration 020 trigger
 posts notify approved admins and approved project providers (bell + push). The project
 page's tab now follows `?tab=`, and `?message=<id>` opens a post.
 
+Extended 2026-09-17 (spec `docs/superpowers/specs/2026-09-17-message-board-richtext-categories-design.md`):
+rich-text bodies via a shared `RichTextEditor`/`RichTextBody` also used by task comments;
+@mentions of project members and admins with bell, push and email; agency-wide
+admin-editable categories that archive rather than delete. Clients are never mentionable or
+notified on internal posts. Migration 021.
+
 ### Stage 4 — client experience (dashboard still to build)
 
 Third nav set (no Revenue / Rewards / Team). Client dashboard carries: project cards with
@@ -87,10 +93,10 @@ items specifically:
   resolves to the per-deployment hostname, which then depends on the
   `https://weblikha-portal-*-<scope>.vercel.app/**` redirect wildcard being present.
 - Run `npm run check` locally — lint cannot run from the Cowork VM (see Environment notes)
-- **Apply migration 020 to dev, then to prod, and only then merge the message-board PR.**
-  The deploy order changed during execution: merging first would ship a bell query that
-  embeds `messages` through `notifications.message_id`, which errors on a database without
-  020 and empties every user's notification dropdown. See CLAUDE.md → "Applying migrations".
+- **Apply 021 to dev (020 already applied there). Before merging: apply 020 then 021 to
+  prod.** The deploy order matters: merging first would ship a bell query that embeds
+  `messages` through `notifications.message_id`, which errors on a database without 020/021
+  and empties every user's notification dropdown. See CLAUDE.md → "Applying migrations".
 
 ---
 

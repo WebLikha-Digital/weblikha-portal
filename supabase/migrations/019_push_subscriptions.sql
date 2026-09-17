@@ -1,6 +1,14 @@
 -- =============================================================================
 -- WEBLIKHA PORTAL — WEB PUSH SUBSCRIPTIONS
--- Migration: 014_push_subscriptions.sql
+-- Migration: 019_push_subscriptions.sql
+--
+-- RENUMBERED from 014. This file and 014_client_collaboration.sql were written on
+-- branches that did not see each other and both took number 014. This one moved,
+-- rather than shifting 014-018, because it depends only on 001 (users,
+-- set_updated_at) and nothing later references it — so a fresh replay in filename
+-- order is still valid — whereas 014-018 cross-reference each other by number
+-- throughout their comments. It was already applied to dev and prod by hand under
+-- its old name; the rename does not re-run it. NOT idempotent: never replay it.
 --
 -- One row per browser/device per user. Subscription keys (endpoint/p256dh/auth)
 -- let their holder send pushes to that device, so RLS is owner-only for ALL

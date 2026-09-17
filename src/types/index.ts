@@ -336,8 +336,11 @@ export interface AppNotification {
 
 /** Notification with the joined actor + task the bell dropdown renders */
 export interface NotificationWithMeta extends AppNotification {
-  actor: Pick<User, 'id' | 'name' | 'avatar_url'> | null
-  task:  { id: string; title: string } | null
+  actor:   Pick<User, 'id' | 'name' | 'avatar_url'> | null
+  task:    { id: string; title: string } | null
+  message: { id: string; title: string } | null
+  /** id and name only — never select budget into a notification. */
+  project: { id: string; name: string } | null
 }
 
 // ── Push subscriptions ─────────────────────────────────────────────────────────

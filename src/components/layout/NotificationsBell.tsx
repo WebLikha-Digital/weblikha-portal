@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, BellRing, CheckCheck, AtSign, ClipboardList } from 'lucide-react'
+import { Bell, BellRing, CheckCheck, AtSign, ClipboardList, MessageSquare } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui'
 import { cn, formatRelative } from '@/lib/utils'
@@ -29,6 +29,23 @@ const PUSH_DISMISSED_KEY = 'weblikha-push-dismissed'
 interface NotificationsBellProps {
   variant:    'sidebar' | 'header'
   collapsed?: boolean
+}
+
+/** Explicit per type, so a new type is never mislabelled as an assignment. */
+function describe(n: NotificationWithMeta): { lead: string; subject: string | null } {
+  switch (n.type) {
+    case 'mention':
+      return { lead: ' mentioned you in ', subject: n.task?.title ?? 'a task' }
+    case 'task_assigned':
+      return { lead: ' assigned you ', subject: n.task?.title ?? 'a task' }
+    case 'client_message':
+      return {
+        lead:    ` posted in ${n.project?.name ?? 'a project'}: `,
+        subject: n.message?.title ?? 'a message',
+      }
+    default:
+      return { lead: ` — new activity in ${n.project?.name ?? 'a project'}`, subject: null }
+  }
 }
 
 export function NotificationsBell({ variant, collapsed = false }: NotificationsBellProps) {
@@ -46,7 +63,7 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
     const [listRes, countRes] = await Promise.all([
       supabase
         .from('notifications')
-        .select('*, actor:users!notifications_actor_id_fkey(id, name, avatar_url), task:tasks(id, title)')
+        .select('*, actor:users!notifications_actor_id_fkey(id, name, avatar_url), task:tasks(id, title), message:messages(id, title), project:projects(id, name)')
         .order('created_at', { ascending: false })
         .limit(15),
       supabase
@@ -92,7 +109,11 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
         .update({ read_at: now })
         .eq('id', n.id)
     }
-    router.push(`/projects/${n.project_id}?tab=todos`)
+    router.push(
+      n.type === 'client_message' && n.message_id
+        ? `/projects/${n.project_id}?tab=messages&message=${n.message_id}`
+        : `/projects/${n.project_id}?tab=todos`,
+    )
   }
 
   async function markAllRead() {
@@ -245,17 +266,21 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
                     <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-bg-surface-3 text-tertiary">
                       {n.type === 'mention'
                         ? <AtSign className="size-3" aria-hidden />
-                        : <ClipboardList className="size-3" aria-hidden />}
+                        : n.type === 'client_message'
+                          ? <MessageSquare className="size-3" aria-hidden />
+                          : <ClipboardList className="size-3" aria-hidden />}
                     </span>
                   )}
 
                   <span className="min-w-0 flex-1">
-                    <span className="block text-xs text-secondary leading-snug">
+                    <span className="block text-xs text-secondary leading-snug break-words">
                       <span className="font-medium text-primary">{n.actor?.name ?? 'Someone'}</span>
-                      {n.type === 'mention' ? ' mentioned you in ' : ' assigned you '}
-                      <span className="font-medium text-primary">
-                        &ldquo;{n.task?.title ?? 'a task'}&rdquo;
-                      </span>
+                      {describe(n).lead}
+                      {describe(n).subject !== null && (
+                        <span className="font-medium text-primary">
+                          &ldquo;{describe(n).subject}&rdquo;
+                        </span>
+                      )}
                     </span>
                     <span className="mt-0.5 block text-2xs text-tertiary">
                       {formatRelative(n.created_at)}

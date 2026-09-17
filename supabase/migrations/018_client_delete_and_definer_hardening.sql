@@ -343,6 +343,8 @@ comment on function public.reorder_task is
 -- 014 deliberately gave them that. Membership is not carried on messages the
 -- way it is on work items. Called out here so the asymmetry reads as a
 -- decision rather than an oversight.
+-- SUPERSEDED: migration 020 adds is_project_member(project_id) to this policy
+-- (and back-ports it into 014).
 -- =============================================================================
 
 drop policy if exists "tasks: client deletes own pending" on public.tasks;

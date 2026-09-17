@@ -1781,6 +1781,14 @@ Dispatch, per CLAUDE.md: `schema-reviewer` and `rls-security-reviewer` on `020_m
 
 - [ ] **Step 6 (Matthew): Apply migration 020 to dev**
 
+Before applying, run this read-only query in the SQL Editor of the target project and expect `0`:
+
+    select count(*) from public.messages
+    where char_length(btrim(title)) not between 1 and 200
+       or char_length(btrim(body))  not between 1 and 10000;
+
+If it is not 0, stop — those rows need trimming before 020 is applied.
+
 ```powershell
 $env:DB_URL = Get-Clipboard
 $env:DB_URL -replace ':[^:@/]+@', ':***@'
@@ -1807,6 +1815,6 @@ Expected: the first `migration list` shows only 020 unapplied; the last shows 00
 
 - [ ] **Step 8 (Matthew): Apply to prod BEFORE merging the PR**
 
-Same commands as step 6 with the prod URL (masked URL must show `vhsuyouczctnkvnnjzgg`). **Apply 020 to prod first, then merge.** The new bell query embeds `messages` through `notifications.message_id`; deployed against a database without 020, that query errors and every user's notification dropdown renders empty. The reverse order is safe: 020 is additive, and the currently deployed code never touches what it adds (the old Messages tab is read-only, and no client-post UI exists to fire the new trigger).
+Same commands as step 6 with the prod URL (masked URL must show `vhsuyouczctnkvnnjzgg`). Run the same pre-apply count query against prod first and expect 0. **Apply 020 to prod first, then merge.** The new bell query embeds `messages` through `notifications.message_id`; deployed against a database without 020, that query errors and every user's notification dropdown renders empty. The reverse order is safe: 020 is additive, and the currently deployed code never touches what it adds (the old Messages tab is read-only, and no client-post UI exists to fire the new trigger).
 
 *(Corrected during execution: this step originally said to merge first. The Task 6 review found the empty-bell window.)*

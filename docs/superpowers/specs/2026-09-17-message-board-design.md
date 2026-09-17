@@ -1,7 +1,7 @@
 # Client Portal Stage 3 — Project Message Board
 
 **Date:** 2026-09-17
-**Status:** Approved design, not yet implemented
+**Status:** Implemented on `feature/message-board`; migration 020 pending apply
 **Branch:** `feature/message-board`
 
 ---

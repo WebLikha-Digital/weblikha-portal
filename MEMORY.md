@@ -243,7 +243,7 @@ When admin approves a team member in Settings, email them. Plan: call Resend API
 In-app bell (migration 013) + web push (migration 014) both live. Remaining notification follow-ups: membership check in the migration-013 trigger, `pushsubscriptionchange` handler, disable-push UI, client tagging later.
 
 ### AI features (parked until non-AI roadmap ships)
-Parked until Revenue, Rewards, Resend email, notifications, message compose, and service worker ship. (As of 2026-07-14 only message compose remains.) Agreed favorite: **AI project scaffolding** — describe a project in a sentence at creation, Claude generates phases/tasks with due dates + point values, admin reviews before applying (reuses `applyTemplate` machinery). Runners-up: weekly per-project digest to message board; comment-thread summarizer. Needs `ANTHROPIC_API_KEY` server-side; Sonnet for scaffolding, Haiku for digests.
+Parked until Revenue, Rewards, Resend email, notifications, message compose, and service worker ship. (Message compose was built 2026-09-17 on feature/message-board; once merged, the non-AI list is complete.) Agreed favorite: **AI project scaffolding** — describe a project in a sentence at creation, Claude generates phases/tasks with due dates + point values, admin reviews before applying (reuses `applyTemplate` machinery). Runners-up: weekly per-project digest to message board; comment-thread summarizer. Needs `ANTHROPIC_API_KEY` server-side; Sonnet for scaffolding, Haiku for digests.
 
 ---
 

@@ -99,7 +99,12 @@ export function ProjectTabsLayout({
         />
       )}
       {activeTab === 'messages' && (
-        <MessagesTab messages={messages} />
+        <MessagesTab
+          messages={messages}
+          projectId={projectId}
+          currentUserId={currentUserId}
+          viewerRole={viewerRole}
+        />
       )}
       {activeTab === 'team' && (
         <TeamTab

@@ -52,7 +52,8 @@ src/
 │   │   ├── layout.tsx       Checks auth + approval, fetches user, renders PortalShell
 │   │   ├── dashboard/       Eagle's eye view (KPI cards)
 │   │   ├── projects/        Project list + [id] detail (tabs: todos, messages, team)
-│   │   │   └── actions.ts   Server Actions: tasks, comments, messages, members, claim
+│   │   │   ├── actions.ts          Server Actions: tasks, comments, members, claim
+│   │   │   └── message-actions.ts  Server Actions: create/update/delete messages + push
 │   │   ├── team/            Performance & leaderboard + members management
 │   │   │   └── actions.ts   Server Actions: admin points, member edits
 │   │   ├── clients/         Client management (admin only) — page pending, actions done
@@ -72,7 +73,9 @@ src/
 ├── components/
 │   ├── ui/                  Primitives — barrel-export from index.ts
 │   │   ├── index.ts         Button, Badge (+statusLabel), StatCard, Avatar, Input, Textarea
-│   │   ├── confirm-dialog.tsx   confirmDialog() + <ConfirmHost/> — NOT in barrel, import directly
+│   │   ├── confirm-dialog.tsx   confirmDialog() + <ConfirmHost/> — NOT in barrel, import directly.
+│   │   │                        Escape is handled in the capture phase so it dismisses the
+│   │   │                        confirm dialog without also closing a modal open beneath it.
 │   │   └── toast.tsx            toast() + host — NOT in barrel, import directly
 │   ├── layout/             PortalShell, sidebar, MobileNav, MobileTabBar, NotificationsBell
 │   └── modules/            Feature-specific components
@@ -144,7 +147,7 @@ Tailwind is configured to map those tokens to utility classes. Enforced by the
 ## Database schema
 
 Postgres on Supabase. All tables have Row Level Security enabled. Schema is built up
-across `supabase/migrations/001` → `019` (see the migration log below). The
+across `supabase/migrations/001` → `020` (see the migration log below). The
 authoritative TypeScript mirror is `src/types/index.ts` — update it whenever a column
 changes.
 
@@ -169,7 +172,8 @@ performance_periods user_id, period_month, period_year, task_points, deadline_po
                     admin_points, total_points (generated), admin_note, timestamps
 revenue_entries     id, project_id, type (income|expense), amount, date, note
 notifications       id, user_id, actor_id, type (mention|task_assigned|client_task|
-                    client_message), project_id, task_id, comment_id, read_at, created_at
+                    client_message), project_id, task_id, comment_id, message_id,
+                    read_at, created_at
 push_subscriptions  id, user_id, endpoint (unique), p256dh, auth, user_agent, timestamps
                     (one row per browser/device; owner-only RLS — server reads use
                     the service-role admin client in src/lib/supabase/admin.ts)
@@ -223,7 +227,8 @@ template_tasks          id, template_task_list_id, title, description, points_va
 014 client collaboration (created_by, client RLS, points fix, client_projects view)
 015 client privilege fixes   016 privilege hardening (admin self-promotion)
 017 read scope fixes         018 client delete + definer hardening
-019 web push subscriptions
+019 web push subscriptions   020 message board (visibility lock, provider edit/delete,
+                                 client_message notifications)
 ```
 
 **Why 019 is out of chronological order.** Web push shipped first but was numbered 014 on a
@@ -268,6 +273,13 @@ Threshold for loyalty incentive: **1,000 pts/month**. Admin views/overrides `adm
   never mark work done or mint incentive points), an assignee must already be a project
   member, and client messages are forced `is_client_visible = true` (otherwise RLS would
   hide the client's own post from them).
+- **Messages:** admins manage all; providers read all posts in their projects and edit or
+  delete their own; clients read shared posts only and edit or delete their own. Team
+  members choose visibility when posting (default internal); clients always post shared.
+  **Visibility, project and author are locked after posting for every role** by a
+  trigger (migration 020). A client post notifies approved admins and approved project
+  providers via the `notify_client_message` trigger; `projects/message-actions.ts` pushes
+  to exactly those notification rows.
 - Revenue table: **admin only** — providers and clients never see financial data
 - **Budget caveat:** RLS is row-level. The `projects: member or admin` policy hands any
   member the whole row including `budget`, so client screens must read `client_projects`.
@@ -277,8 +289,8 @@ Threshold for loyalty incentive: **1,000 pts/month**. Admin views/overrides `adm
 ## Client portal
 
 **Status:** invite/auth and the `/clients` admin page are shipped and live in production;
-the invite flow is tested end to end on dev and prod. The **message board** and the
-**client dashboard** are not built. See @MEMORY.md → "Not done yet" for the backlog.
+the invite flow is tested end to end on dev and prod. The **message board** is built
+(Stage 3); the **client dashboard** is not. See @MEMORY.md → "Not done yet" for the backlog.
 
 Invited clients collaborate on the projects they are assigned to. Agreed behaviour —
 these were decisions, not guesses, so don't quietly redesign them:

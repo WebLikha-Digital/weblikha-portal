@@ -7,7 +7,9 @@
  *
  * quietIds: ids that may briefly be missing from props for a legitimate reason —
  * just posted (props arrive after revalidation) or being deleted. Without it,
- * the "no longer available" check would fire a false error in both cases.
+ * the "no longer available" check would fire a false error in both cases. An id
+ * leaves the quiet set once it appears in props or its delete fails, so a link
+ * to a message that is later genuinely gone still reports correctly.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { useEffect, useRef, useState } from 'react'
@@ -41,7 +43,12 @@ export function MessagesTab({ messages, projectId, currentUserId, viewerRole }: 
   const openMessage = openId ? messages.find(m => m.id === openId) ?? null : null
 
   useEffect(() => {
-    if (!openId || openMessage) return
+    if (openMessage) {
+      // The message has arrived in props (e.g. after posting) — no longer quiet.
+      if (openId) quietIds.current.delete(openId)
+      return
+    }
+    if (!openId) return
     if (quietIds.current.has(openId)) return
     toast.error('That message is no longer available.')
     replaceSearchParams({ message: null })
@@ -160,6 +167,7 @@ export function MessagesTab({ messages, projectId, currentUserId, viewerRole }: 
           onClose={closePost}
           onEdit={() => setEditing(openMessage)}
           onDeleteStart={id => quietIds.current.add(id)}
+          onDeleteFailed={id => quietIds.current.delete(id)}
         />
       )}
     </>

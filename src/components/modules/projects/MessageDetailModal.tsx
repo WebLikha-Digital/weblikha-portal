@@ -22,9 +22,10 @@ interface MessageDetailModalProps {
   projectId:     string
   viewerRole:    UserRole
   currentUserId: string
-  onClose:       () => void
-  onEdit:        () => void
-  onDeleteStart: (messageId: string) => void
+  onClose:        () => void
+  onEdit:         () => void
+  onDeleteStart:  (messageId: string) => void
+  onDeleteFailed: (messageId: string) => void
 }
 
 export function MessageDetailModal({
@@ -35,6 +36,7 @@ export function MessageDetailModal({
   onClose,
   onEdit,
   onDeleteStart,
+  onDeleteFailed,
 }: MessageDetailModalProps) {
   const [isPending, startTransition] = useTransition()
   const canManage = viewerRole === 'admin' || message.author_id === currentUserId
@@ -59,7 +61,12 @@ export function MessageDetailModal({
     startTransition(async () => {
       await withToast(async () => {
         onDeleteStart(message.id)
-        await deleteMessage(message.id, projectId)
+        try {
+          await deleteMessage(message.id, projectId)
+        } catch (err) {
+          onDeleteFailed(message.id)
+          throw err
+        }
         toast.success('Message deleted.')
         onClose()
       }, 'Could not delete the message.')

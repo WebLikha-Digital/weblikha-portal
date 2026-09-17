@@ -38,8 +38,9 @@ is fixed by deleting and reposting. The compose button states the outcome ("Post
 - Notifying clients of team posts
 - Rich text, attachments or @mentions in message bodies — bodies stay plain text
 - Changing Server Actions app-wide to return `{ ok, message }` (see Error handling)
-- A `(project_id, created_at)` composite index — `idx_messages_project_id` is sufficient at
-  current volume
+- Any new index or `updated_at` trigger on `messages` — migration 002 already created
+  `idx_messages_created_at (project_id, created_at desc)` and the `set_messages_updated_at`
+  trigger. (An earlier draft of this spec wrongly listed the trigger as missing.)
 
 ---
 
@@ -63,16 +64,16 @@ comments explaining why, `drop … if exists` before every create, pinned
 | `messages: client deletes own` | 014 | **no membership check** (backlog #8) |
 | *(none)* | — | **providers cannot edit or delete their own posts** |
 
-`messages.updated_at` exists but **no trigger maintains it**.
+`messages.updated_at` is already maintained by 002's `set_messages_updated_at` trigger, so
+the "Edited" label needs no schema change.
 
 ### Changes
 
-**1a. `updated_at` trigger** — `messages_set_updated_at`, `before update`, executing the
-shared `public.set_updated_at()`.
-
 **1b. Immutable-column guard** — `public.guard_message_immutable_columns()`, `before update`
 trigger `messages_guard_immutable_columns`. Raises `42501` if `is_client_visible`,
-`project_id` or `author_id` changes (`is distinct from`). Applies to **all** roles including
+`project_id` or `author_id` changes (`is distinct from`) — except `author_id` changing **to
+null**, which is `ON DELETE SET NULL` firing when an author's user row is deleted and must
+not be blocked. Applies to **all** roles including
 admin. Returns early when `auth.uid() is null` so service-role maintenance still works,
 matching 016's guards.
 
@@ -101,7 +102,7 @@ row's author has role `client`, insert one `client_message` notification
 (`user_id`, `actor_id = new.author_id`, `project_id`, `message_id`) for each recipient:
 
 - every user with `role = 'admin'` and `approved = true`, **plus**
-- every user with `role = 'provider'` who is a member of `new.project_id`
+- every user with `role = 'provider'` and `approved = true` who is a member of `new.project_id`
 
 excluding the author. Team posts create no notifications. **This trigger is the single
 source of truth for recipients** — see §2.
@@ -227,9 +228,10 @@ pending. Tokens only; mobile and desktop classes in the same pass.
 
 ### `NotificationsBell`
 
-- Query adds `message: messages(id, title)`; `NotificationWithMeta` widens to match.
+- Query adds `message: messages(id, title)` and `project: projects(id, name)` (id and name
+  only — never `budget`); `NotificationWithMeta` widens to match.
 - Rendering becomes an explicit switch on `type`: `mention` and `task_assigned` unchanged;
-  `client_message` renders *"{actor} posted "{title}" in {project}"* (title falls back to
+  `client_message` renders *"{actor} posted in {project}: "{title}""* (title falls back to
   "a message" if the embed is null). Any other type — including `client_task`, which the
   constraint allows but nothing emits yet — renders a neutral *"New activity in {project}"*
   rather than being mislabelled.

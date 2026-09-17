@@ -1,7 +1,7 @@
 # Project Memory — Weblikha Portal
 
 Consolidated session memory. Imported into Claude Code via `@MEMORY.md` in CLAUDE.md.
-Last synced 2026-09-08.
+Last synced 2026-09-17.
 
 ---
 
@@ -16,7 +16,7 @@ Stage 4 already landed, and "Not done yet" at the bottom of this file for the fu
 
 | Stage | What | Status |
 |---|---|---|
-| — | Migration 014 (client collab) + types | ✅ Applied by hand to **dev and prod**. Not in `schema_migrations` (SQL Editor); written idempotently, safe to re-run |
+| — | Migration 014 (client collab) + types | ✅ Applied to **dev and prod**, and recorded in both history tables since the 2026-09-17 cleanup |
 | 1 | Invite + set-password auth | ✅ Done and **tested end to end on dev AND prod** — invite → email → `/auth/confirm` → set password → dashboard |
 | 2 | `/clients` admin page + nav | ✅ Done, merged (PR #3), deployed to prod |
 | 3 | Message board | ⬜ **NEXT** — still a read-only shell, see below |
@@ -103,13 +103,21 @@ client collaboration, written on branches that never saw each other. Web push mo
 014–018 cite each other by number throughout their comments, so moving one file was far
 cheaper than shifting five.
 
-Verified before repairing, on both databases: a schema fingerprint query confirmed every
+Verified before repairing: a schema fingerprint query on both databases confirmed every
 migration's objects exist (`push_subscriptions` included — an older note here claiming dev
-lacked it was wrong), and `supabase_migrations.schema_migrations` **did not exist on either**.
-So the CLI had never successfully run against them: all 19 migrations went in by hand, and
-`db push` would have tried to replay everything from 001 on a live schema. History was then
-backfilled with `migration repair --status applied`, which writes only the history table and
-executes no migration SQL.
+lacked it was wrong). The history tables then turned out to differ:
+
+- **Dev:** no `supabase_migrations.schema_migrations` table at all. Repaired 001–019.
+- **Prod:** 001–014 recorded from earlier CLI pushes, with **014 labelled
+  `push_subscriptions`**. Repaired 015–019, then `--status reverted 014` + `--status applied
+  014` to re-record 014 from the client-collaboration file.
+
+`migration repair` writes only the history table and runs no migration SQL. `migration list`
+now matches 001–019 on both.
+
+**Lesson:** the "neither database has a history table" conclusion was first drawn from
+running the check on *one* project. Always run environment checks on both — prod and dev
+had silently diverged.
 
 **How to run migrations from now on:** see CLAUDE.md → "Applying migrations". In short,
 always `--db-url` (never linked mode), and `migration list` before every `db push`.
@@ -319,8 +327,8 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
 ### Migration hygiene — ✅ done 2026-09-17
 
 5. ~~Two migrations numbered 014~~ — web push renumbered to 019.
-6. ~~`schema_migrations` unaware of applied migrations~~ — the table did not exist on either
-   database; 001–019 backfilled with `migration repair`.
+6. ~~`schema_migrations` unaware of applied migrations~~ — dev had no table (repaired
+   001–019); prod had 001–014 with a mislabelled 014 (repaired 015–019, re-recorded 014).
 7. ~~CLI linked to PROD~~ — sidestepped: use `--db-url`, never linked mode.
 
 ### Known security / correctness gaps, deliberately left

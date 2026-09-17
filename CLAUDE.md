@@ -232,10 +232,20 @@ rather than shifting 014–018: it depends only on 001, nothing references it, a
 cite each other by number throughout their comments. A fresh replay in filename order is
 still valid.
 
-**All of 001–019 were applied by hand through the SQL Editor** on both databases. The CLI's
-history table (`supabase_migrations.schema_migrations`) did not exist on either, so
-`db push` would have tried to replay everything from 001. The history was backfilled with
-`migration repair` — see "Applying migrations" under Running the project.
+**The CLI's history table disagreed with reality on both databases** until the 2026-09-17
+cleanup, in different ways:
+
+- **Dev** had no `supabase_migrations.schema_migrations` table at all — every migration went
+  in by hand, so `db push` would have replayed from 001 on a live schema.
+- **Prod** had 001–014 recorded from earlier CLI pushes, **with 014 labelled
+  `push_subscriptions`** (web push was pushed under that number). 015–018 and the
+  client-collaboration 014 went in by hand and were unrecorded. The CLI matches history by
+  version only, so it showed 014 as applied even though the label named a different migration.
+
+Both were fixed with `migration repair`, which writes only the history table and runs no
+migration SQL: dev got 001–019 recorded; prod got 015–019 recorded and its 014 row reverted
+and re-recorded from the client-collaboration file. `migration list` now matches 001–019 on
+both. See "Applying migrations" under Running the project.
 
 ### Incentive point system
 
@@ -447,12 +457,21 @@ at PROD while `.env.local` pointed at dev. Linked mode also failed with a 403 ("
 login role"); `--db-url` connects straight to Postgres and never touches that API.
 
 ```powershell
-# Supabase dashboard → Connect → Session pooler. Percent-encode special chars in the password.
-# Read-Host keeps the password out of PowerShell's saved history file; typing it inline does not.
-$env:DB_URL = Read-Host "Paste session pooler URL"
+# 1. Supabase dashboard → Connect → Session pooler. Build the full URL with the password in
+#    Notepad, copy it, close Notepad WITHOUT saving. Use an alphanumeric DB password —
+#    #, ?, @ and / break connection URLs unless percent-encoded.
+# 2. Load it from the clipboard. Never type the URL on the command line: PowerShell saves
+#    every typed command, password included, to its history file on disk.
+$env:DB_URL = Get-Clipboard
+
+# 3. Confirm which project it points at, password masked. Dev = tydreidoqzndxjftpyzd
+#    (ap-southeast-2); prod = vhsuyouczctnkvnnjzgg (ap-southeast-1).
+$env:DB_URL -replace ':[^:@/]+@', ':***@'
 
 npx supabase migration list --db-url $env:DB_URL   # local vs remote, side by side
 npx supabase db push        --db-url $env:DB_URL   # dev first, verify, then prod
+
+Remove-Item Env:DB_URL                             # when done
 ```
 
 - The CLI is a devDependency, NOT global — bare `supabase` is "not recognized" on Windows.

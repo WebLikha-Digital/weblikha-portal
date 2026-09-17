@@ -144,7 +144,7 @@ Tailwind is configured to map those tokens to utility classes. Enforced by the
 ## Database schema
 
 Postgres on Supabase. All tables have Row Level Security enabled. Schema is built up
-across `supabase/migrations/001` → `013` (see the migration log below). The
+across `supabase/migrations/001` → `019` (see the migration log below). The
 authoritative TypeScript mirror is `src/types/index.ts` — update it whenever a column
 changes.
 
@@ -220,22 +220,22 @@ template_tasks          id, template_task_list_id, title, description, points_va
 009 rich-text comments, editing, mentions, attachments
 010 task ordering            011 claim unassigned tasks
 012 reorder task RPC         013 in-app notifications
-014 web push subscriptions          014 client collaboration (created_by, client
-                                        RLS, points fix, client_projects view)
-015 client privilege fixes          016 privilege hardening (admin self-promotion)
-017 read scope fixes                018 client delete + definer hardening
+014 client collaboration (created_by, client RLS, points fix, client_projects view)
+015 client privilege fixes   016 privilege hardening (admin self-promotion)
+017 read scope fixes         018 client delete + definer hardening
+019 web push subscriptions
 ```
 
-**⚠️ TWO MIGRATIONS ARE NUMBERED 014.** `014_push_subscriptions.sql` and
-`014_client_collaboration.sql` were written on branches that did not see each other.
-`supabase db push` orders by filename, so this is ambiguous and must be resolved before
-the CLI is used again. Renumbering is not free: 014 (client collaboration), 015 and 016
-were applied **by hand** to dev and prod under these names, so a rename moves the repo
-without moving either database. Decide deliberately, then record what each environment
-actually has.
+**Why 019 is out of chronological order.** Web push shipped first but was numbered 014 on a
+branch that never saw the client portal's 014. In the cleanup, the push file moved to 019
+rather than shifting 014–018: it depends only on 001, nothing references it, and 014–018
+cite each other by number throughout their comments. A fresh replay in filename order is
+still valid.
 
-```
-```
+**All of 001–019 were applied by hand through the SQL Editor** on both databases. The CLI's
+history table (`supabase_migrations.schema_migrations`) did not exist on either, so
+`db push` would have tried to replay everything from 001. The history was backfilled with
+`migration repair` — see "Applying migrations" under Running the project.
 
 ### Incentive point system
 
@@ -433,27 +433,41 @@ cp .env.local.example .env.local
 # required for client invites; NEXT_PUBLIC_SITE_URL is what emailed links are built
 # from (getSiteUrl() falls back to VERCEL_URL, then localhost).
 
-# Apply migrations (Supabase Dashboard SQL Editor, or CLI):
-# npx supabase db push        <- the CLI is a devDependency, NOT global. Bare
-#                                `supabase` is "not recognized" on Windows.
-#   WARNING: supabase/.temp/project-ref decides the target and has historically
-#   pointed at PROD. Check it before pushing:
-#     npx supabase link --project-ref tydreidoqzndxjftpyzd   # dev
-#   NOTE: use gen_random_uuid(), not uuid_generate_v4() — the CLI search_path
-#   doesn't see the extensions schema (bit us on migrations 001/002/005).
-
 npm run dev         # dev server
 npm run typecheck   # tsc --noEmit
 npm run lint        # next lint
 npm run check       # lint + typecheck (run before every PR)
 ```
 
+### Applying migrations
+
+Use the CLI with **`--db-url`**, never the linked mode. The URL names its own project, so
+there is no link state to go stale — `supabase/.temp/project-ref` has historically pointed
+at PROD while `.env.local` pointed at dev. Linked mode also failed with a 403 ("Initialising
+login role"); `--db-url` connects straight to Postgres and never touches that API.
+
+```powershell
+# Supabase dashboard → Connect → Session pooler. Percent-encode special chars in the password.
+# Read-Host keeps the password out of PowerShell's saved history file; typing it inline does not.
+$env:DB_URL = Read-Host "Paste session pooler URL"
+
+npx supabase migration list --db-url $env:DB_URL   # local vs remote, side by side
+npx supabase db push        --db-url $env:DB_URL   # dev first, verify, then prod
+```
+
+- The CLI is a devDependency, NOT global — bare `supabase` is "not recognized" on Windows.
+- **Run `migration list` before every push** and confirm the only unapplied rows are the new ones.
+- If a migration is ever applied by hand in the SQL Editor again, record it immediately with
+  `npx supabase migration repair --status applied <version> --db-url $env:DB_URL` — otherwise
+  the next `db push` will try to run it a second time.
+- Use `gen_random_uuid()`, not `uuid_generate_v4()` — the CLI search_path doesn't see the
+  extensions schema (bit us on migrations 001/002/005).
+
 ### Environments
 
 - **Dev Supabase project:** `tydreidoqzndxjftpyzd` (used locally via `.env.local`).
 - **Prod Supabase project:** `vhsuyouczctnkvnnjzgg`. Prod keys live only in Vercel env vars;
-  service role scoped to Production. Migrations 001–013 applied to prod; **014 is dev-only
-  so far** and must be applied before the client portal ships.
+  service role scoped to Production. Migrations 001–019 applied to **both** dev and prod.
 - **Auth URL config** (Supabase → Authentication → URL Configuration): redirect URLs need a
   `/**` wildcard entry per environment, or Supabase silently ignores `redirectTo` and dumps
   the user on the Site URL. Dev: `http://localhost:3000/**`.

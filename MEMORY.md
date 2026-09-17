@@ -84,8 +84,6 @@ items specifically:
   Preview so `getSiteUrl()` falls back to `VERCEL_URL`). If it is unset, prod `redirectTo`
   resolves to the per-deployment hostname, which then depends on the
   `https://weblikha-portal-*-<scope>.vercel.app/**` redirect wildcard being present.
-- Resolve the duplicate migration 014 numbering and repair `schema_migrations` — `db push`
-  is unsafe until then (see "Production deploy" below).
 - Run `npm run check` locally — lint cannot run from the Cowork VM (see Environment notes)
 
 ---
@@ -97,23 +95,24 @@ Live on Vercel with separate production Supabase project `vhsuyouczctnkvnnjzgg` 
 vars; service role scoped to Production. A `supabase-keepalive-ping` scheduled task pings
 both projects every 3 days.
 
-**Migration state (keep this accurate — two files are numbered 014):**
+**Migration state:** 001–019 applied on **both** dev and prod.
 
-| Environment | Has | Missing |
-|---|---|---|
-| dev `tydreidoqzndxjftpyzd` | 001–013, 014 client-collab, 015–018 | — |
-| prod `vhsuyouczctnkvnnjzgg` | 001–013, 014 push-subscriptions, 014 client-collab, 015–018 (+ the 016 admin-escalation hotfix applied by hand first) | — |
+**Migration cleanup (2026-09-17).** Two files had both been numbered 014 — web push and
+client collaboration, written on branches that never saw each other. Web push moved to
+**`019_push_subscriptions.sql`**. It depends only on 001 and nothing references it, whereas
+014–018 cite each other by number throughout their comments, so moving one file was far
+cheaper than shifting five.
 
-All of 014–018 were applied through the **SQL Editor**, so `schema_migrations` has no
-record of them. `npx supabase db push` would therefore try to replay all five — and with
-two files numbered 014 the order is undefined. **Do not use `db push` until the numbering
-is resolved and `schema_migrations` is repaired** (`npx supabase migration list` shows the
-local-vs-remote picture once CLI auth works). The SQL Editor is the safe path meanwhile.
+Verified before repairing, on both databases: a schema fingerprint query confirmed every
+migration's objects exist (`push_subscriptions` included — an older note here claiming dev
+lacked it was wrong), and `supabase_migrations.schema_migrations` **did not exist on either**.
+So the CLI had never successfully run against them: all 19 migrations went in by hand, and
+`db push` would have tried to replay everything from 001 on a live schema. History was then
+backfilled with `migration repair --status applied`, which writes only the history table and
+executes no migration SQL.
 
-⚠️ `014_push_subscriptions.sql` (from the web-push branch) and `014_client_collaboration.sql`
-(from the client-portal branch) share a number. `supabase db push` orders by filename, so
-that is ambiguous and unresolved. Renumbering moves the repo but not the databases — 014
-client-collab, 015 and 016 were applied by hand under these names. Decide deliberately.
+**How to run migrations from now on:** see CLAUDE.md → "Applying migrations". In short,
+always `--db-url` (never linked mode), and `migration list` before every `db push`.
 
 Google OAuth enabled on both (shared Google Cloud OAuth client, prod callback added).
 Site URL + redirect URLs set to the Vercel domain.
@@ -122,9 +121,8 @@ Site URL + redirect URLs set to the Vercel domain.
 use `{{ .TokenHash }}` pointing at `/auth/confirm` — Invite user with `type=invite`, Reset
 password with `type=recovery`. Magic Link and Confirm signup deliberately keep their default
 `{{ .ConfirmationURL }}` bodies and route through `/auth/callback?code=`. See
-`docs/client-invite-email-templates.md`. **Prod templates point at `/auth/confirm`, which
-does not exist in production until this branch deploys** — do not send a prod invite before
-then.
+`docs/client-invite-email-templates.md`. `/auth/confirm` is deployed, and a prod invite
+has been verified end to end.
 
 `master` → `main` rename done 2026-07-04. Resend approval email shipped (63dc5d1). App icon
 v2 shipped (47c81ba). The old "failing CI" mystery was never CI — it was Vercel blocking a
@@ -247,11 +245,15 @@ The repo used to carry 7 pre-existing `exactOptionalPropertyTypes` errors (dashb
 team/page.tsx, lib/supabase/server.ts). As of 2026-09-08 `npx tsc --noEmit` reports **zero**
 errors. Keep it there.
 
-### Supabase CLI is a devDependency, not global
-`supabase db push` fails on Windows with "not recognized". Use `npx supabase db push`.
-**Check `supabase/.temp/project-ref` before pushing** — it has historically pointed at PROD
-(`vhsuyouczctnkvnnjzgg`), so a push without relinking targets production.
-`npx supabase link --project-ref tydreidoqzndxjftpyzd` switches to dev.
+### Supabase CLI is a devDependency, not global — and use `--db-url`
+`supabase db push` fails on Windows with "not recognized". Use `npx supabase …`.
+
+**Do not use linked mode.** `supabase/.temp/project-ref` still points at PROD
+(`vhsuyouczctnkvnnjzgg`) while `.env.local` points at dev, and linked mode failed with a 403
+at "Initialising login role". Pass `--db-url` with the session-pooler connection string
+instead: the URL names its own project, and it connects straight to Postgres. There is no
+`supabase/config.toml`; `--db-url` mode does not need one (confirmed with CLI 2.109.0).
+Full commands in CLAUDE.md → "Applying migrations".
 
 ### Cowork VM cannot lint
 Claude Cowork sessions reach this repo through `device_bash`, which runs in a Linux VM with
@@ -314,17 +316,12 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
    migrations: client sees the to-do list, can add a phase, sees the Team tab populated, and
    has no Rewards in the nav. Fixed in code, verified by review, not each exercised in a browser.
 
-### Migration hygiene — do before the next feature
+### Migration hygiene — ✅ done 2026-09-17
 
-5. **Two migrations are numbered 014** (`014_push_subscriptions.sql` from web push and
-   `014_client_collaboration.sql` from the client portal). Renumbering moves the repo but not
-   the databases, since 014–016 were applied by hand under these names.
-6. **`schema_migrations` does not know about 014–018** — all applied through the SQL Editor.
-   `npx supabase db push` would try to replay all five, in an undefined order between the two
-   014s. Needs `npx supabase migration list` then `migration repair`. **Do not `db push`
-   until this is done.**
-7. **The CLI has historically been linked to PROD.** Check `supabase/.temp/project-ref`
-   before any CLI command; `npx supabase link --project-ref tydreidoqzndxjftpyzd` for dev.
+5. ~~Two migrations numbered 014~~ — web push renumbered to 019.
+6. ~~`schema_migrations` unaware of applied migrations~~ — the table did not exist on either
+   database; 001–019 backfilled with `migration repair`.
+7. ~~CLI linked to PROD~~ — sidestepped: use `--db-url`, never linked mode.
 
 ### Known security / correctness gaps, deliberately left
 

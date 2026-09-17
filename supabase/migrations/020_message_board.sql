@@ -7,7 +7,12 @@
 -- (project_id, created_at desc) index (002) — none of those are recreated here.
 --
 --   1. Lock is_client_visible, project_id and author_id after insert, for every
---      role including admin. Visibility is chosen once, at posting.
+--      role including admin. Visibility is chosen once, at posting. This also
+--      applies to admin sessions — the older "messages: admin all" policy let
+--      admins correct a mis-set visibility; that is no longer possible. The
+--      correction for a post published with the wrong visibility is delete and
+--      repost. Only service-role / SQL Editor statements (auth.uid() is null)
+--      can still change these columns.
 --   2. Rewrite 004's provider/client policies with the helper functions.
 --   3. Providers can edit and delete their own posts (no policy existed).
 --   4. Client delete gains is_project_member — revoking a client deletes their
@@ -217,6 +222,44 @@ create trigger messages_notify_client_message
 
 
 -- =============================================================================
+-- 7. INDEX + LENGTH LIMITS
+--
+-- 002 indexes project_id and (project_id, created_at desc) but not author_id —
+-- an FK that this migration's provider edit/delete and client edit/delete
+-- policies now filter on (author_id = auth.uid()).
+--
+-- Clients can now post, and messageDraftError() (src/lib/messages.ts) runs only
+-- in the Server Action. A client calling PostgREST directly could otherwise
+-- store a multi-megabyte title or body, which every project member downloads
+-- and which is pushed to every recipient. These limits mirror
+-- src/lib/messages.ts (MESSAGE_TITLE_MAX / MESSAGE_BODY_MAX) and must change
+-- together with it.
+--
+-- NOT VALID is deliberate: existing rows are not re-checked on apply, so the
+-- migration cannot fail on a legacy row, while every new insert and update is
+-- enforced immediately.
+-- =============================================================================
+
+create index if not exists idx_messages_author_id on public.messages(author_id);
+
+alter table public.messages
+  drop constraint if exists messages_title_length;
+
+alter table public.messages
+  add constraint messages_title_length
+  check (char_length(btrim(title)) between 1 and 200)
+  not valid;
+
+alter table public.messages
+  drop constraint if exists messages_body_length;
+
+alter table public.messages
+  add constraint messages_body_length
+  check (char_length(btrim(body)) between 1 and 10000)
+  not valid;
+
+
+-- =============================================================================
 -- DONE
 -- After running: NOTIFY pgrst, 'reload schema';
 --
@@ -226,4 +269,6 @@ create trigger messages_notify_client_message
 --   - As a client, post → one client_message row per approved admin and per approved
 --     provider on the project; none for the client.
 --   - Delete a user who authored a message (service role) → succeeds; author_id becomes null.
+--   - Insert a message with a 201-character title via the API → rejected by
+--     messages_title_length.
 -- =============================================================================

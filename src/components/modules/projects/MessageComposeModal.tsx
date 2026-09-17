@@ -192,8 +192,8 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
                 onClick={() => setClientVisible(v => !v)}
                 disabled={isPending}
                 className={cn(
-                  'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-150',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:opacity-80',
+                  'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition duration-150',
+                  'hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:opacity-80',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                   clientVisible ? 'bg-brand' : 'bg-bg-surface-3',
                 )}

@@ -143,7 +143,7 @@ interface RichTextEditorProps {
 ### 2b. `src/components/modules/editor/RichTextBody.tsx`
 
 The DOMPurify config moved from `CommentBody`. If the body does not start with a tag
-(`/<[a-z][\s\S]*>/i` does not match), render it as escaped plain text with
+(`body.trimStart().startsWith('<')` is false — the existing comment rule), render it as escaped plain text with
 `whitespace-pre-wrap` — this is how pre-021 messages display.
 
 `CommentEditor` and `CommentBody` become thin wrappers over these two, keeping their current

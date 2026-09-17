@@ -168,13 +168,25 @@ alter table public.messages
 
 -- =============================================================================
 -- 5. NOTIFICATION TYPE
+-- NOT VALID: this table is busy, and a full-table validation scan would lock
+-- it. Existing rows already satisfy the widened list (it only adds a value),
+-- so there is nothing to backfill.
 -- =============================================================================
 
 alter table public.notifications
   drop constraint if exists notifications_type_check;
 alter table public.notifications
   add constraint notifications_type_check
-  check (type in ('mention', 'task_assigned', 'client_task', 'client_message', 'message_mention'));
+  check (type in ('mention', 'task_assigned', 'client_task', 'client_message', 'message_mention'))
+  not valid;
+
+-- Mirrors MESSAGE_MENTIONS_MAX in src/lib/messages.ts — keep them in sync.
+-- The column is new with default '{}', so plain (validating) is fine here.
+alter table public.messages
+  drop constraint if exists messages_mentions_count;
+alter table public.messages
+  add constraint messages_mentions_count
+  check (cardinality(mentions) <= 50);
 
 
 -- =============================================================================
@@ -191,6 +203,13 @@ alter table public.notifications
 -- mentions a team member. It depends on trigger order: Postgres fires
 -- same-event triggers in NAME order, so messages_notify_client_message (020)
 -- runs before messages_notify_mentions. Renaming either trigger can break this.
+--
+-- actor_id is always the post's author (new.author_id) — including when an
+-- admin edits someone else's post, the notification still reads as coming
+-- from the original author, not the editing admin. And a candidate who
+-- already holds any notification for this message (e.g. a client_message row
+-- from posting it) is not sent a second, mention-flavoured notice — by
+-- design, not an oversight.
 -- =============================================================================
 
 create or replace function public.notify_message_mentions()

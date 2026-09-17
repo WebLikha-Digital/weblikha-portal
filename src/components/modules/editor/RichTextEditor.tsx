@@ -165,6 +165,11 @@ function buildMentionSuggestion(getCandidates: () => MentionCandidate[]) {
     render: () => {
       let component: ReactRenderer<MentionListHandle, SuggestionProps<MentionItem>> | null = null
       let popup: HTMLDivElement | null = null
+      // Escape closes the popup but TipTap's suggestion plugin stays active
+      // (the user hasn't left the @query). Without this flag, a later
+      // Enter/Arrow key would still route to the destroyed-looking-but-alive
+      // MentionList and silently insert a mention.
+      let dismissed = false
 
       function position(clientRect: (() => DOMRect | null) | null | undefined) {
         if (!popup || !clientRect) return
@@ -176,6 +181,7 @@ function buildMentionSuggestion(getCandidates: () => MentionCandidate[]) {
 
       return {
         onStart: (props: SuggestionProps<MentionItem>) => {
+          dismissed = false
           component = new ReactRenderer(MentionList, { props, editor: props.editor })
           popup = document.createElement('div')
           popup.className =
@@ -185,15 +191,18 @@ function buildMentionSuggestion(getCandidates: () => MentionCandidate[]) {
           position(props.clientRect)
         },
         onUpdate: (props: SuggestionProps<MentionItem>) => {
+          if (dismissed) return
           component?.updateProps(props)
           position(props.clientRect)
         },
         onKeyDown: (props: SuggestionKeyDownProps) => {
+          if (dismissed) return false
           if (props.event.key === 'Escape') {
             // Keep Escape from bubbling to a surrounding modal's document
             // listener — it should close the mention list, not the modal.
             props.event.stopPropagation()
             popup?.remove()
+            dismissed = true
             return true
           }
           return component?.ref?.onKeyDown(props) ?? false
@@ -203,6 +212,7 @@ function buildMentionSuggestion(getCandidates: () => MentionCandidate[]) {
           component?.destroy()
           popup = null
           component = null
+          dismissed = false
         },
       }
     },

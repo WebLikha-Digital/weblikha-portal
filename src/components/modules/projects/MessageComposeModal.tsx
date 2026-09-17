@@ -59,9 +59,11 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
     isEmpty:   props.mode !== 'edit',
     uploading: false,
   })
-  const [categoryId, setCategoryId] = useState<string | null>(
-    props.mode === 'edit' ? props.message.category_id : null,
-  )
+  // Only this saved category (when editing) may still appear archived in the
+  // picker. Any other category — including this one's own prior value before
+  // a save — must clear itself if archived while the modal is open.
+  const originalCategoryId = props.mode === 'edit' ? props.message.category_id : null
+  const [categoryId, setCategoryId] = useState<string | null>(originalCategoryId)
   const [clientVisible, setClientVisible] = useState(
     props.mode === 'edit' ? props.message.is_client_visible : false,
   )
@@ -93,6 +95,15 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
 
   const mentionsClientOnInternal =
     !shared && body.mentions.some(id => roleById.get(id) === 'client')
+
+  // Categories refresh via revalidatePath, so archiving one from "Edit
+  // categories…" mid-compose lands here as a prop change — drop the
+  // selection unless it's the post's own already-archived category.
+  useEffect(() => {
+    if (categoryId === null || categoryId === originalCategoryId) return
+    const picked = props.categories.find(c => c.id === categoryId)
+    if (picked?.archived_at) setCategoryId(null)
+  }, [props.categories, categoryId, originalCategoryId])
 
   const { onClose } = props
   const close = useCallback(() => {
@@ -191,6 +202,7 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
             canManage={isAdmin}
             onManage={() => setManaging(true)}
             disabled={isPending}
+            keepArchivedId={originalCategoryId}
           />
 
           <Input

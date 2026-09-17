@@ -2,8 +2,11 @@
 /**
  * CATEGORY PICKER
  * ─────────────────────────────────────────────────────────────────────────────
- * Button + listbox: None, then active categories by position. A post whose
- * category was since archived keeps it selected, shown as "(archived)".
+ * Button + listbox: None, then active categories by position. Only an existing
+ * post whose SAVED category is archived may keep it selected, shown as
+ * "(archived)" — pass that category's id as `keepArchivedId`. A newly-composed
+ * post, or one whose category has since been switched away, never offers an
+ * archived category as a choice.
  * Keyboard: arrows move, Enter/Space choose, Escape closes ONLY the list —
  * it stops propagation so the surrounding modal's Escape listener doesn't fire.
  * ─────────────────────────────────────────────────────────────────────────────
@@ -14,12 +17,15 @@ import { cn } from '@/lib/utils'
 import type { MessageCategory } from '@/types'
 
 interface CategoryPickerProps {
-  categories: MessageCategory[]
-  value:      string | null
-  onChange:   (id: string | null) => void
-  canManage:  boolean
-  onManage:   () => void
-  disabled?:  boolean | undefined
+  categories:      MessageCategory[]
+  value:           string | null
+  onChange:        (id: string | null) => void
+  canManage:       boolean
+  onManage:        () => void
+  disabled?:       boolean | undefined
+  /** The only archived category id allowed to appear, as "(archived)" — the
+   *  post's own saved category when editing. Omit/null on a new post. */
+  keepArchivedId?: string | null | undefined
 }
 
 interface Option {
@@ -30,7 +36,7 @@ interface Option {
 }
 
 export function CategoryPicker({
-  categories, value, onChange, canManage, onManage, disabled = false,
+  categories, value, onChange, canManage, onManage, disabled = false, keepArchivedId = null,
 }: CategoryPickerProps) {
   const [open, setOpen]     = useState(false)
   const [active, setActive] = useState(0)
@@ -38,10 +44,11 @@ export function CategoryPicker({
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   const selected = categories.find(c => c.id === value) ?? null
+  const selectedArchivedKept = Boolean(selected?.archived_at && selected.id === keepArchivedId)
 
   const options: Option[] = [
     { id: null, label: 'None', emoji: null, archived: false },
-    ...(selected?.archived_at
+    ...(selectedArchivedKept && selected
       ? [{ id: selected.id, label: selected.name, emoji: selected.emoji, archived: true }]
       : []),
     ...categories
@@ -108,7 +115,7 @@ export function CategoryPicker({
         className="inline-flex max-w-full items-center gap-1.5 h-8 px-3 rounded-md border border-subtle text-sm text-secondary hover:text-primary hover:border-[var(--color-border-default)] active:opacity-80 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <span className="truncate">
-          {selected
+          {selected && (!selected.archived_at || selectedArchivedKept)
             ? `${selected.emoji} ${selected.name}${selected.archived_at ? ' (archived)' : ''}`
             : 'Pick a category (optional)'}
         </span>

@@ -19,10 +19,11 @@ import { Eye, MessageSquare, Plus } from 'lucide-react'
 import { Avatar, Button } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
 import { formatRelative } from '@/lib/utils'
-import { isEdited } from '@/lib/messages'
+import { isEdited, messageExcerpt } from '@/lib/messages'
 import { replaceSearchParams } from '@/lib/url-state'
 import { MessageComposeModal } from './MessageComposeModal'
 import { MessageDetailModal } from './MessageDetailModal'
+import { MessageCategoryPill } from './MessageCategoryPill'
 import type {
   MessageCategory, MessageWithAuthor, ProjectMember, User, UserRole,
 } from '@/types'
@@ -118,6 +119,7 @@ export function MessagesTab({
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <MessageCategoryPill category={msg.category} />
                     <h3 className="min-w-0 text-sm font-medium text-primary truncate">{msg.title}</h3>
                     {!isClient && msg.is_client_visible && (
                       <span className="shrink-0 flex items-center gap-1 text-2xs text-info bg-info/10 px-2 py-0.5 rounded-full">
@@ -126,7 +128,7 @@ export function MessagesTab({
                     )}
                   </div>
                   <p className="text-xs text-secondary line-clamp-2 leading-relaxed break-words">
-                    {msg.body}
+                    {messageExcerpt(msg.body)}
                   </p>
                   <div className="flex flex-wrap items-center gap-x-2 mt-2 text-2xs text-tertiary">
                     <span>{msg.author?.name ?? 'Unknown'}</span>

@@ -15,6 +15,8 @@ import { toast, withToast } from '@/components/ui/toast'
 import { formatRelative } from '@/lib/utils'
 import { isEdited } from '@/lib/messages'
 import { deleteMessage } from '@/app/(portal)/projects/message-actions'
+import { RichTextBody } from '@/components/modules/editor/RichTextBody'
+import { MessageCategoryPill } from './MessageCategoryPill'
 import type { MessageWithAuthor, UserRole } from '@/types'
 
 interface MessageDetailModalProps {
@@ -116,6 +118,8 @@ export function MessageDetailModal({
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2">
+          <MessageCategoryPill category={message.category} />
           {!isClient && (
             message.is_client_visible ? (
               <span className="inline-flex items-center gap-1 text-2xs text-info bg-info/10 px-2 py-0.5 rounded-full">
@@ -127,10 +131,9 @@ export function MessageDetailModal({
               </span>
             )
           )}
+          </div>
 
-          <p className="text-sm text-primary leading-relaxed whitespace-pre-wrap break-words">
-            {message.body}
-          </p>
+          <RichTextBody body={message.body} size="sm" />
         </div>
 
         {canManage && (

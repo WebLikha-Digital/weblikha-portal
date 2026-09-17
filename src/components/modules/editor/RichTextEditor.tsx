@@ -190,6 +190,9 @@ function buildMentionSuggestion(getCandidates: () => MentionCandidate[]) {
         },
         onKeyDown: (props: SuggestionKeyDownProps) => {
           if (props.event.key === 'Escape') {
+            // Keep Escape from bubbling to a surrounding modal's document
+            // listener — it should close the mention list, not the modal.
+            props.event.stopPropagation()
             popup?.remove()
             return true
           }

@@ -183,7 +183,8 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
         <button
           onClick={() => setOpen(v => { if (!v) void load(); return !v })}
           className={cn(
-            'flex w-full items-center gap-2.5 rounded-md py-2 text-sm transition-colors duration-fast',
+            'flex w-full items-center gap-2.5 rounded-md py-2 text-sm transition-colors duration-fast active:opacity-80',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
             collapsed ? 'justify-center px-2' : 'px-3',
             open ? 'bg-bg-overlay text-primary' : 'text-secondary hover:bg-bg-overlay hover:text-primary',
           )}
@@ -200,7 +201,8 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
         <button
           onClick={() => setOpen(v => { if (!v) void load(); return !v })}
           className={cn(
-            'relative p-1.5 rounded-md transition-colors',
+            'relative p-1.5 rounded-md transition-colors active:opacity-80',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
             open ? 'text-primary bg-bg-overlay' : 'text-secondary hover:text-primary hover:bg-bg-overlay',
           )}
           aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ''}`}
@@ -228,7 +230,7 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
               <button
                 onClick={markAllRead}
                 disabled={marking || unread === 0}
-                className="flex items-center gap-1 text-2xs text-secondary hover:text-brand disabled:opacity-40 disabled:hover:text-secondary transition-colors"
+                className="flex items-center gap-1 rounded text-2xs text-secondary hover:text-brand active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40 disabled:hover:text-secondary transition-colors"
                 title="Mark all as read"
               >
                 <CheckCheck className="size-3.5" aria-hidden />
@@ -272,7 +274,8 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
                     key={n.id}
                     onClick={() => openItem(n)}
                     className={cn(
-                      'flex w-full items-start gap-2.5 px-4 py-3 text-left border-b border-subtle last:border-b-0 transition-colors hover:bg-bg-surface-2',
+                      'flex w-full items-start gap-2.5 px-4 py-3 text-left border-b border-subtle last:border-b-0 transition-colors hover:bg-bg-surface-2 active:bg-bg-surface-3',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset',
                       !n.read_at && 'bg-brand/5',
                     )}
                   >

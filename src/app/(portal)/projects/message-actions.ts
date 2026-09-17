@@ -154,8 +154,8 @@ async function deliverNotifications(
       url,
     })
     await sendPushToUsers(mentionRecipients, {
-      title: `${actorName} mentioned you`,
-      body:  title,
+      title: `${actorName} mentioned you in "${title}"`,
+      body:  'Tap to open the message.',
       url,
     })
     await emailMentions(admin, mentionRecipients, actorName, title, url)

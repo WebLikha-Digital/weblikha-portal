@@ -163,6 +163,7 @@ export default async function ProjectDetailPage({ params }: Props) {
     .from('message_categories')
     .select('*')
     .order('position', { ascending: true })
+    .order('created_at', { ascending: true })
   if (categoriesError) {
     console.error('[projects/[id]] message categories fetch failed — picker will be empty:', categoriesError)
   }

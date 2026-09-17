@@ -123,10 +123,23 @@ export interface Message {
   project_id:        string
   author_id:         string | null
   title:             string
-  body:              string
+  body:              string          // Rich-text HTML; pre-021 rows may be plain text
   is_client_visible: boolean
+  category_id:       string | null
+  mentions:          string[]
   created_at:        string
   updated_at:        string
+}
+
+/** Agency-wide message board category (migration 021). Archived, never deleted. */
+export interface MessageCategory {
+  id:          string
+  name:        string
+  emoji:       string
+  position:    number
+  archived_at: string | null
+  created_at:  string
+  updated_at:  string
 }
 
 export interface PerformancePeriod {
@@ -319,6 +332,7 @@ export type NotificationType =
   | 'task_assigned'
   | 'client_task'
   | 'client_message'
+  | 'message_mention'
 
 /** notifications table row (named to avoid clashing with the DOM Notification type) */
 export interface AppNotification {

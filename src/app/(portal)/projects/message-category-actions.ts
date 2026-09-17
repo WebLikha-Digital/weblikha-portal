@@ -95,7 +95,6 @@ export async function archiveCategory(id: string): Promise<void> {
     .from('message_categories')
     .update({ archived_at: new Date().toISOString() })
     .eq('id', id)
-    .is('archived_at', null)
     .select('id')
 
   if (error) throw new Error(error.message)

@@ -71,13 +71,17 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
         .select('*', { count: 'exact', head: true })
         .is('read_at', null),
     ])
+    // Log code + message explicitly: the Next.js dev overlay renders a
+    // PostgrestError object as `{}`, which hid a missing-migration error.
     if (listRes.error) {
-      console.error('[notifications] list fetch failed:', listRes.error)
+      const { code, message } = listRes.error
+      console.error(`[notifications] list fetch failed: ${code} ${message}`)
     } else if (listRes.data) {
       setItems(listRes.data as unknown as NotificationWithMeta[])
     }
     if (countRes.error) {
-      console.error('[notifications] unread count fetch failed:', countRes.error)
+      const { code, message } = countRes.error
+      console.error(`[notifications] unread count fetch failed: ${code} ${message}`)
     } else if (typeof countRes.count === 'number') {
       setUnread(countRes.count)
     }

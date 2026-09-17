@@ -122,7 +122,7 @@ migration comment so a rename does not silently break de-duplication.
 from `CommentEditor`. A form field, not a form:
 
 ```ts
-interface MentionCandidate { id: string; name: string; avatar_url: string | null }
+interface MentionCandidate { id: string; name: string }
 
 interface RichTextEditorProps {
   initialContent?: string
@@ -142,7 +142,7 @@ interface RichTextEditorProps {
 
 ### 2b. `src/components/modules/editor/RichTextBody.tsx`
 
-The DOMPurify config moved from `CommentBody`. If the body contains no HTML tag
+The DOMPurify config moved from `CommentBody`. If the body does not start with a tag
 (`/<[a-z][\s\S]*>/i` does not match), render it as escaped plain text with
 `whitespace-pre-wrap` — this is how pre-021 messages display.
 

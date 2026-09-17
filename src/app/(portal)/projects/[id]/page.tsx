@@ -148,7 +148,9 @@ export default async function ProjectDetailPage({ params }: Props) {
   // rather than failing the entire page over it.
   const { data: messagesRaw, error: messagesError } = await supabase
     .from('messages')
-    .select('*, author: users(*)')
+    // Explicit columns: users(*) shipped every author's email and
+    // employment_type into clients' RSC payload.
+    .select('*, author: users(id, name, avatar_url, role)')
     .eq('project_id', id)
     .order('created_at', { ascending: false })
   if (messagesError) {

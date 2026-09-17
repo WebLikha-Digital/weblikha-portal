@@ -71,8 +71,16 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
         .select('*', { count: 'exact', head: true })
         .is('read_at', null),
     ])
-    if (listRes.data) setItems(listRes.data as unknown as NotificationWithMeta[])
-    if (typeof countRes.count === 'number') setUnread(countRes.count)
+    if (listRes.error) {
+      console.error('[notifications] list fetch failed:', listRes.error)
+    } else if (listRes.data) {
+      setItems(listRes.data as unknown as NotificationWithMeta[])
+    }
+    if (countRes.error) {
+      console.error('[notifications] unread count fetch failed:', countRes.error)
+    } else if (typeof countRes.count === 'number') {
+      setUnread(countRes.count)
+    }
   }, [])
 
   useEffect(() => {
@@ -251,47 +259,50 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
                 </p>
               )}
 
-              {items.map(n => (
-                <button
-                  key={n.id}
-                  onClick={() => openItem(n)}
-                  className={cn(
-                    'flex w-full items-start gap-2.5 px-4 py-3 text-left border-b border-subtle last:border-b-0 transition-colors hover:bg-bg-surface-2',
-                    !n.read_at && 'bg-brand/5',
-                  )}
-                >
-                  {n.actor ? (
-                    <Avatar name={n.actor.name} src={n.actor.avatar_url} size="xs" />
-                  ) : (
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-bg-surface-3 text-tertiary">
-                      {n.type === 'mention'
-                        ? <AtSign className="size-3" aria-hidden />
-                        : n.type === 'client_message'
-                          ? <MessageSquare className="size-3" aria-hidden />
-                          : <ClipboardList className="size-3" aria-hidden />}
-                    </span>
-                  )}
+              {items.map(n => {
+                const { lead, subject } = describe(n)
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => openItem(n)}
+                    className={cn(
+                      'flex w-full items-start gap-2.5 px-4 py-3 text-left border-b border-subtle last:border-b-0 transition-colors hover:bg-bg-surface-2',
+                      !n.read_at && 'bg-brand/5',
+                    )}
+                  >
+                    {n.actor ? (
+                      <Avatar name={n.actor.name} src={n.actor.avatar_url} size="xs" />
+                    ) : (
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-bg-surface-3 text-tertiary">
+                        {n.type === 'mention'
+                          ? <AtSign className="size-3" aria-hidden />
+                          : n.type === 'client_message'
+                            ? <MessageSquare className="size-3" aria-hidden />
+                            : <ClipboardList className="size-3" aria-hidden />}
+                      </span>
+                    )}
 
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs text-secondary leading-snug break-words">
-                      <span className="font-medium text-primary">{n.actor?.name ?? 'Someone'}</span>
-                      {describe(n).lead}
-                      {describe(n).subject !== null && (
-                        <span className="font-medium text-primary">
-                          &ldquo;{describe(n).subject}&rdquo;
-                        </span>
-                      )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs text-secondary leading-snug break-words">
+                        <span className="font-medium text-primary">{n.actor?.name ?? 'Someone'}</span>
+                        {lead}
+                        {subject !== null && (
+                          <span className="font-medium text-primary">
+                            &ldquo;{subject}&rdquo;
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-0.5 block text-2xs text-tertiary">
+                        {formatRelative(n.created_at)}
+                      </span>
                     </span>
-                    <span className="mt-0.5 block text-2xs text-tertiary">
-                      {formatRelative(n.created_at)}
-                    </span>
-                  </span>
 
-                  {!n.read_at && (
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand" aria-label="Unread" />
-                  )}
-                </button>
-              ))}
+                    {!n.read_at && (
+                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand" aria-label="Unread" />
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </>

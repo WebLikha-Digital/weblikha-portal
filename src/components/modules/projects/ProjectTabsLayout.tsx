@@ -17,7 +17,7 @@ import { TodosTab } from '@/components/modules/projects/TodosTab'
 import { MessagesTab } from '@/components/modules/projects/MessagesTab'
 import { TeamTab } from '@/components/modules/projects/TeamTab'
 import type {
-  TaskListWithTasks, MessageWithAuthor,
+  TaskListWithTasks, MessageWithAuthor, MessageCategory,
   User, ProjectTemplate, ProjectDetail, UserRole,
 } from '@/types'
 
@@ -38,6 +38,7 @@ interface ProjectTabsLayoutProps {
   currentUserId:    string
   taskLists:        TaskListWithTasks[]
   messages:         MessageWithAuthor[]
+  categories:       MessageCategory[]
   members:          ProjectDetail['members']
   admins:           User[]
   availableMembers: User[]
@@ -52,6 +53,7 @@ export function ProjectTabsLayout({
   currentUserId,
   taskLists,
   messages,
+  categories,
   members,
   admins,
   availableMembers,
@@ -101,6 +103,9 @@ export function ProjectTabsLayout({
       {activeTab === 'messages' && (
         <MessagesTab
           messages={messages}
+          categories={categories}
+          members={members}
+          admins={admins}
           projectId={projectId}
           currentUserId={currentUserId}
           viewerRole={viewerRole}

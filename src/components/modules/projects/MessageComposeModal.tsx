@@ -4,53 +4,95 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Create and edit. Mounted by the parent only while open.
  *
- * Visibility: team members get a "Visible to client" switch, OFF by default, and
- * the submit button names the outcome ("Post internally" / "Post to client") so
- * the setting is visible at the moment of posting. Clients get no switch — their
- * posts are always shared. In edit mode visibility is read-only: migration 020
- * locks it after posting.
+ * Order: category → title → rich-text body → visibility → footer.
  *
- * Validation runs client-side with the same rules as the Server Actions, because
- * production Next.js redacts thrown Server Action messages.
+ * Visibility: team members get a "Visible to client" switch, OFF by default;
+ * the submit button names the outcome. Clients have no switch — always shared.
+ * Locked after posting (migration 020).
+ *
+ * Mentions: project members + approved admins. On an INTERNAL post clients are
+ * removed from the list, and if the switch is turned off after a client was
+ * mentioned, a note explains they won't be notified. Migration 021's trigger
+ * enforces the same rule in the database.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { useCallback, useEffect, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { X } from 'lucide-react'
-import { Button, Input, Textarea } from '@/components/ui'
+import { Button, Input } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 import { createMessage, updateMessage } from '@/app/(portal)/projects/message-actions'
-import { MESSAGE_BODY_MAX, MESSAGE_TITLE_MAX, messageDraftError } from '@/lib/messages'
-import type { MessageWithAuthor, UserRole } from '@/types'
+import { MESSAGE_TITLE_MAX, messageDraftError, plainTextToHtml } from '@/lib/messages'
+import {
+  RichTextEditor, type MentionCandidate, type RichTextValue,
+} from '@/components/modules/editor/RichTextEditor'
+import { CategoryPicker } from './CategoryPicker'
+import { CategoryManagerModal } from './CategoryManagerModal'
+import type {
+  MessageCategory, MessageWithAuthor, ProjectMember, User, UserRole,
+} from '@/types'
+
+interface SharedProps {
+  projectId:  string
+  viewerRole: UserRole
+  categories: MessageCategory[]
+  members:    (ProjectMember & { user: User })[]
+  admins:     User[]
+  onClose:    () => void
+}
 
 type MessageComposeModalProps =
-  | {
-      mode:       'create'
-      projectId:  string
-      viewerRole: UserRole
-      onClose:    () => void
-      onPosted:   (messageId: string) => void
-    }
-  | {
-      mode:       'edit'
-      projectId:  string
-      viewerRole: UserRole
-      message:    MessageWithAuthor
-      onClose:    () => void
-      onSaved:    () => void
-    }
+  | (SharedProps & { mode: 'create'; onPosted: (messageId: string) => void })
+  | (SharedProps & { mode: 'edit'; message: MessageWithAuthor; onSaved: () => void })
 
 export function MessageComposeModal(props: MessageComposeModalProps) {
   const isEdit   = props.mode === 'edit'
   const isClient = props.viewerRole === 'client'
+  const isAdmin  = props.viewerRole === 'admin'
+
+  const initialHtml = props.mode === 'edit' ? plainTextToHtml(props.message.body) : ''
 
   const [title, setTitle] = useState(props.mode === 'edit' ? props.message.title : '')
-  const [body, setBody]   = useState(props.mode === 'edit' ? props.message.body : '')
+  const [body, setBody]   = useState<RichTextValue>({
+    html:      initialHtml,
+    mentions:  props.mode === 'edit' ? props.message.mentions : [],
+    isEmpty:   props.mode !== 'edit',
+    uploading: false,
+  })
+  const [categoryId, setCategoryId] = useState<string | null>(
+    props.mode === 'edit' ? props.message.category_id : null,
+  )
   const [clientVisible, setClientVisible] = useState(
     props.mode === 'edit' ? props.message.is_client_visible : false,
   )
-  const [error, setError] = useState<string | null>(null)
+  const [managing, setManaging] = useState(false)
+  const [error, setError]       = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const shared = isClient || clientVisible
+
+  const roleById = useMemo(() => {
+    const map = new Map<string, UserRole>()
+    for (const m of props.members) map.set(m.user_id, m.user.role)
+    for (const a of props.admins) map.set(a.id, 'admin')
+    return map
+  }, [props.members, props.admins])
+
+  const allCandidates = useMemo<MentionCandidate[]>(() => {
+    const items: MentionCandidate[] = props.members.map(m => ({ id: m.user_id, name: m.user.name }))
+    for (const a of props.admins) {
+      if (!items.some(i => i.id === a.id)) items.push({ id: a.id, name: a.name })
+    }
+    return items.sort((a, b) => a.name.localeCompare(b.name))
+  }, [props.members, props.admins])
+
+  const mentionables = useMemo(
+    () => (shared ? allCandidates : allCandidates.filter(c => roleById.get(c.id) !== 'client')),
+    [shared, allCandidates, roleById],
+  )
+
+  const mentionsClientOnInternal =
+    !shared && body.mentions.some(id => roleById.get(id) === 'client')
 
   const { onClose } = props
   const close = useCallback(() => {
@@ -58,16 +100,22 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
   }, [isPending, onClose])
 
   useEffect(() => {
+    if (managing) return
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') close()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [close])
+  }, [close, managing])
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const problem = messageDraftError({ title, bodyHtml: body, mentions: [], categoryId: null })
+    if (body.uploading) {
+      setError('Wait for images to finish uploading.')
+      return
+    }
+    const draft = { title, bodyHtml: body.html, mentions: body.mentions, categoryId }
+    const problem = messageDraftError(draft)
     if (problem) {
       setError(problem)
       return
@@ -77,23 +125,11 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
     startTransition(async () => {
       try {
         if (props.mode === 'create') {
-          const shared = isClient || clientVisible
-          const id = await createMessage(props.projectId, {
-            title,
-            bodyHtml:        body,
-            mentions:        [],
-            categoryId:      null,
-            isClientVisible: shared,
-          })
+          const id = await createMessage(props.projectId, { ...draft, isClientVisible: shared })
           toast.success(shared ? 'Message posted.' : 'Posted internally.')
           props.onPosted(id)
         } else {
-          await updateMessage(props.message.id, props.projectId, {
-            title,
-            bodyHtml:   body,
-            mentions:   [],
-            categoryId: props.message.category_id,
-          })
+          await updateMessage(props.message.id, props.projectId, draft)
           toast.success('Message updated.')
           props.onSaved()
         }
@@ -118,7 +154,7 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label={isEdit ? 'Edit message' : 'New message'}
-        className="fixed inset-y-0 right-0 z-50 w-full max-w-lg bg-bg-surface-1 shadow-2xl flex flex-col"
+        className="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-bg-surface-1 shadow-2xl flex flex-col"
       >
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-subtle">
           <h2 className="text-base font-semibold text-primary">
@@ -148,6 +184,15 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
             </div>
           )}
 
+          <CategoryPicker
+            categories={props.categories}
+            value={categoryId}
+            onChange={setCategoryId}
+            canManage={isAdmin}
+            onManage={() => setManaging(true)}
+            disabled={isPending}
+          />
+
           <Input
             label="Title"
             id="message-title"
@@ -158,18 +203,24 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
             placeholder="e.g. Homepage design is ready for review"
           />
 
-          <Textarea
-            label="Message"
-            id="message-body"
-            value={body}
-            onChange={e => setBody(e.target.value)}
-            maxLength={MESSAGE_BODY_MAX}
-            disabled={isPending}
-            rows={10}
-            placeholder="Write your update or question…"
-          />
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-secondary font-medium">Message</p>
+            <RichTextEditor
+              mentionables={mentionables}
+              uploadPrefix={`messages/${props.projectId}`}
+              onChange={setBody}
+              initialContent={initialHtml}
+              placeholder="Write your update or question…"
+              disabled={isPending}
+              contentClassName="[&_.ProseMirror]:min-h-48"
+            />
+            {mentionsClientOnInternal && (
+              <p className="text-2xs text-warning">
+                Clients mentioned here won&apos;t be notified — this post is internal.
+              </p>
+            )}
+          </div>
 
-          {/* Visibility */}
           {isEdit ? (
             <div className="rounded-md border border-subtle px-3 py-2.5">
               <p className="text-xs font-medium text-primary">
@@ -226,6 +277,13 @@ export function MessageComposeModal(props: MessageComposeModalProps) {
           </Button>
         </div>
       </div>
+
+      {managing && (
+        <CategoryManagerModal
+          categories={props.categories}
+          onClose={() => setManaging(false)}
+        />
+      )}
     </>
   )
 }

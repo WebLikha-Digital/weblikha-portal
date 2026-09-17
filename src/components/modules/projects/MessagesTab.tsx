@@ -23,16 +23,23 @@ import { isEdited } from '@/lib/messages'
 import { replaceSearchParams } from '@/lib/url-state'
 import { MessageComposeModal } from './MessageComposeModal'
 import { MessageDetailModal } from './MessageDetailModal'
-import type { MessageWithAuthor, UserRole } from '@/types'
+import type {
+  MessageCategory, MessageWithAuthor, ProjectMember, User, UserRole,
+} from '@/types'
 
 interface MessagesTabProps {
   messages:      MessageWithAuthor[]
+  categories:    MessageCategory[]
+  members:       (ProjectMember & { user: User })[]
+  admins:        User[]
   projectId:     string
   currentUserId: string
   viewerRole:    UserRole
 }
 
-export function MessagesTab({ messages, projectId, currentUserId, viewerRole }: MessagesTabProps) {
+export function MessagesTab({
+  messages, categories, members, admins, projectId, currentUserId, viewerRole,
+}: MessagesTabProps) {
   const searchParams = useSearchParams()
   const openId       = searchParams.get('message')
   const isClient     = viewerRole === 'client'
@@ -144,6 +151,9 @@ export function MessagesTab({ messages, projectId, currentUserId, viewerRole }: 
           mode="create"
           projectId={projectId}
           viewerRole={viewerRole}
+          categories={categories}
+          members={members}
+          admins={admins}
           onClose={() => setComposing(false)}
           onPosted={id => {
             quietIds.current.add(id)
@@ -158,6 +168,9 @@ export function MessagesTab({ messages, projectId, currentUserId, viewerRole }: 
           mode="edit"
           projectId={projectId}
           viewerRole={viewerRole}
+          categories={categories}
+          members={members}
+          admins={admins}
           message={editing}
           onClose={() => setEditing(null)}
           onSaved={() => setEditing(null)}

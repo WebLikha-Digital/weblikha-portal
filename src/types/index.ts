@@ -220,7 +220,8 @@ export interface TaskListWithTasks extends TaskList {
 /** Message with its author — only the fields the board renders. The full users
  *  row carries email and employment_type, which must not reach clients. */
 export interface MessageWithAuthor extends Message {
-  author: Pick<User, 'id' | 'name' | 'avatar_url' | 'role'> | null
+  author:   Pick<User, 'id' | 'name' | 'avatar_url' | 'role'> | null
+  category: Pick<MessageCategory, 'id' | 'name' | 'emoji' | 'archived_at'> | null
 }
 
 /** Performance period joined with the team member's user row */

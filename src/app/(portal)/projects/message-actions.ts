@@ -8,9 +8,11 @@
  *   1. Row-count checks on update/delete. An RLS USING mismatch returns zero
  *      rows WITHOUT an error (only WITH CHECK violations raise), so an
  *      unauthorised edit would otherwise "succeed" and silently revert.
- *   2. Push for client posts. In-app notifications are created by the
- *      notify_client_message trigger; this reads the rows it created and pushes
- *      to exactly those users, so in-app and push recipients cannot drift.
+ *   2. Push after every post. In-app notifications are created by the
+ *      notify_client_message trigger (none for a team post, one row per
+ *      recipient for a client post); this always reads whatever rows the
+ *      trigger created and pushes to exactly those users, so in-app and push
+ *      recipients cannot drift.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { revalidatePath } from 'next/cache'
@@ -31,8 +33,9 @@ export async function createMessage(
   const problem = messageDraftError(draft)
   if (problem) throw new Error(problem)
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('users').select('role, name').eq('id', user.id).single()
+  if (profileError) console.error('[messages] Failed to read author profile:', profileError)
   const isClient = profile?.role === 'client'
 
   const { data: inserted, error } = await supabase
@@ -51,9 +54,7 @@ export async function createMessage(
 
   if (error || !inserted) throw new Error(error?.message ?? 'Could not post the message.')
 
-  if (isClient) {
-    await pushClientMessage(inserted.id, inserted.title, projectId, profile?.name ?? 'A client')
-  }
+  await pushClientMessage(inserted.id, inserted.title, projectId, profile?.name ?? 'A client')
 
   revalidatePath(`/projects/${projectId}`)
   return inserted.id
@@ -102,8 +103,12 @@ export async function deleteMessage(messageId: string, projectId: string): Promi
 }
 
 /**
- * Best-effort: a push failure never fails the post. Uses the service-role client
- * because notification rows are readable only by their owner.
+ * Called after every post, client or team. Reads whatever notification rows
+ * notify_client_message created for this message — none for a team post, so
+ * sendPushToUsers gets an empty list and returns immediately — and pushes to
+ * exactly those users. Best-effort: a push failure never fails the post. Uses
+ * the service-role client because notification rows are readable only by
+ * their owner.
  */
 async function pushClientMessage(
   messageId: string,

@@ -110,12 +110,10 @@ items specifically:
   The order mattered: merging first would have shipped a bell query embedding `messages`
   through `notifications.message_id`, which errors on a database without 020/021 and empties
   every user's notification dropdown.
-- Apply 022 to dev, run the reply checklist, apply to prod, then merge.
-- Apply 023 to dev, run the checklist, apply to prod, then merge. Two things to remember
-  while doing it: (a) `app_settings` is a new table, so run `NOTIFY pgrst, 'reload schema';`
-  right after applying — PostgREST won't see it otherwise and the portal silently falls back
-  to the 15-minute default; (b) when testing a change to the window, reload the page — an
-  already-open tab keeps the old number until it reloads, which otherwise looks like a bug.
+- ~~Apply 022 to dev and prod~~ — done 2026-09-18, tested on dev.
+- ~~Apply 023 to dev and prod~~ — done 2026-09-18, tested on dev. (`app_settings` is a new
+  table, so `NOTIFY pgrst, 'reload schema';` was needed after applying; when changing the
+  window, reload the page — an open tab keeps the old number.)
 
 ---
 
@@ -126,7 +124,7 @@ Live on Vercel with separate production Supabase project `vhsuyouczctnkvnnjzgg` 
 vars; service role scoped to Production. A `supabase-keepalive-ping` scheduled task pings
 both projects every 3 days.
 
-**Migration state:** 001–021 applied on **both** dev and prod (020 + 021 applied 2026-09-18, before the message-board branch merged).
+**Migration state:** 001–023 applied on **both** dev and prod (020–023 applied 2026-09-18, each before the branch that needed it merged).
 
 **Migration cleanup (2026-09-17).** Two files had both been numbered 014 — web push and
 client collaboration, written on branches that never saw each other. Web push moved to

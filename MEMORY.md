@@ -1,7 +1,7 @@
 # Project Memory — Weblikha Portal
 
 Consolidated session memory. Imported into Claude Code via `@MEMORY.md` in CLAUDE.md.
-Last synced 2026-09-17.
+Last synced 2026-09-18.
 
 ---
 
@@ -9,7 +9,8 @@ Last synced 2026-09-17.
 
 Mid-build. Stages 1 and 2 are **done, deployed to prod, and the invite flow is tested end
 to end on both dev and prod**. **Stage 3 (the message board) is built on
-`feature/message-board`, pending migration 020 and merge** — see below. Stage 4's client
+`feature/message-board`; migrations 020 + 021 are applied on dev and prod, so the branch
+is ready to merge** — see below. Stage 4's client
 dashboard is still missing — see the table below for exactly what of Stage 4 already
 landed, and "Not done yet" at the bottom of this file for the full backlog.
 
@@ -93,10 +94,10 @@ items specifically:
   resolves to the per-deployment hostname, which then depends on the
   `https://weblikha-portal-*-<scope>.vercel.app/**` redirect wildcard being present.
 - Run `npm run check` locally — lint cannot run from the Cowork VM (see Environment notes)
-- **Apply 021 to dev (020 already applied there). Before merging: apply 020 then 021 to
-  prod.** The deploy order matters: merging first would ship a bell query that embeds
-  `messages` through `notifications.message_id`, which errors on a database without 020/021
-  and empties every user's notification dropdown. See CLAUDE.md → "Applying migrations".
+- ~~Apply 020 + 021 to dev and prod~~ — done 2026-09-18, both databases, before merging.
+  The order mattered: merging first would have shipped a bell query embedding `messages`
+  through `notifications.message_id`, which errors on a database without 020/021 and empties
+  every user's notification dropdown.
 
 ---
 
@@ -107,7 +108,7 @@ Live on Vercel with separate production Supabase project `vhsuyouczctnkvnnjzgg` 
 vars; service role scoped to Production. A `supabase-keepalive-ping` scheduled task pings
 both projects every 3 days.
 
-**Migration state:** 001–019 applied on **both** dev and prod.
+**Migration state:** 001–021 applied on **both** dev and prod (020 + 021 applied 2026-09-18, before the message-board branch merged).
 
 **Migration cleanup (2026-09-17).** Two files had both been numbered 014 — web push and
 client collaboration, written on branches that never saw each other. Web push moved to

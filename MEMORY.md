@@ -8,10 +8,10 @@ Last synced 2026-09-18.
 ## Current focus: the client portal
 
 Mid-build. Stages 1 and 2 are **done, deployed to prod, and the invite flow is tested end
-to end on both dev and prod**. **Stage 3 (the message board) is shipped: merged
-via PR #6 and deployed to production, with migrations 020 + 021 applied to dev and prod
-first** — see below. Stage 4's client
-dashboard is still missing — see the table below for exactly what of Stage 4 already
+to end on both dev and prod**. **Stage 3 (the message board) is fully shipped —
+posts, reply threads and the editing window, merged as PRs #6, #7 and #8 and deployed to
+production, with migrations 020–023 applied to dev and prod first** — see below. Stage 4's
+client dashboard is still missing — see the table below for exactly what of Stage 4 already
 landed, and "Not done yet" at the bottom of this file for the full backlog.
 
 ### Stage status
@@ -21,7 +21,7 @@ landed, and "Not done yet" at the bottom of this file for the full backlog.
 | — | Migration 014 (client collab) + types | ✅ Applied to **dev and prod**, and recorded in both history tables since the 2026-09-17 cleanup |
 | 1 | Invite + set-password auth | ✅ Done and **tested end to end on dev AND prod** — invite → email → `/auth/confirm` → set password → dashboard |
 | 2 | `/clients` admin page + nav | ✅ Done, merged (PR #3), deployed to prod |
-| 3 | Message board | ✅ Shipped (PR #6, merged 2026-09-18, prod at `fa602ec`): compose/edit/delete, default-internal visibility switch, client posts notify the team, URL deep links, rich text + @mentions + categories |
+| 3 | Message board | ✅ Shipped (PRs #6, #7, #8, merged 2026-09-18, prod at `2c52643`): compose/edit/delete, default-internal visibility switch, client posts notify the team, URL deep links, rich text + @mentions + categories, reply threads, author-only editing inside a window |
 | 4 | Client dashboard + project view | 🟡 Partial: client nav set, `/rewards` guard, to-do capability gates, Team tab names-and-roles-only, "empty to-do list" query fix. **The client dashboard itself is not built.** |
 | — | Verification pass | 🟡 015–018 applied to dev **and** prod. PRs #3 and #4 merged; prod deployed at `27ab19d`. The four client-portal findings were fixed in code but **not individually re-tested** against the applied migrations. |
 
@@ -54,13 +54,13 @@ rich-text bodies via a shared `RichTextEditor`/`RichTextBody` also used by task 
 admin-editable categories that archive rather than delete. Clients are never mentionable or
 notified on internal posts. Migration 021.
 
-Replies shipped 2026-09-18 (spec `docs/superpowers/specs/2026-09-18-message-replies-design.md`,
-migration 022): a flat thread per post, visibility inherited from the post, notifying the
+Replies shipped 2026-09-18 — PR #7, migration 022 (spec
+`docs/superpowers/specs/2026-09-18-message-replies-design.md`): a flat thread per post, visibility inherited from the post, notifying the
 post's author and everyone already in the thread. Editing a reply notifies nobody, including
 for a newly added mention.
 
-Editing tightened 2026-09-18 (spec `docs/superpowers/specs/2026-09-18-edit-window-design.md`,
-migration 023): only the author may edit a post, reply or task comment, and only inside an
+Editing tightened 2026-09-18 — PR #8, migration 023 (spec
+`docs/superpowers/specs/2026-09-18-edit-window-design.md`): only the author may edit a post, reply or task comment, and only inside an
 agency-wide window (default 15 minutes, Settings → Content). Admins lost the FOR ALL write
 power that let them edit other people's content; they keep delete. Everything posted before
 023 is past the window, so it is no longer editable.

@@ -73,6 +73,38 @@ overdue deadlines. Project detail shows the **full** to-do list including intern
 with "Added by client" badges; template apply hidden; Team tab shows **names and roles only**
 (no `employment_type` — in-house vs outsource is agency-internal).
 
+### Onboarding and profiles (2026-09-18, migration 024)
+
+Not part of the client-portal stages above — a separate feature on
+`feature/onboarding-profiles`. Migration `024_user_profiles.sql` adds nullable profile
+columns to `users` (`phone`, `birthdate`, `timezone`, `job_title`, `location`, `bio`,
+`company`, `company_website`, `onboarded_at`) with CHECK constraints, a
+`guard_user_timezone()` trigger rejecting a non-IANA zone, and an `avatars` storage bucket
+(public read; insert/update/delete scoped to `avatars/{own id}/…`). No new RLS on `users` —
+016's guard still blocks writing `role`, `approved` or `email` through the same update.
+
+`/onboarding` (in `(auth)`) is a one-screen form — photo optional, phone, timezone
+pre-filled from the browser, company for clients — gated by a redirect in
+`(portal)/layout.tsx` when `onboarded_at` is null, the same checkpoint that sends
+unapproved users to `/pending`. `completeOnboarding` runs once and refuses to re-stamp.
+Every existing user, not just new signups, meets this screen once on their next sign-in,
+since `onboarded_at` is null for all of them until they pass through it.
+
+`/profile` (in `(portal)`, reachable from the sidebar user block) is the one-form, one-Save
+edit screen for the same fields plus name, job title, birthday, location and bio — email
+stays read-only. There is deliberately no password UI anywhere in either screen: the invite
+link and the forgot-password email already cover changing a password.
+
+`PersonMeta` surfaces job title, a formatted local time and birthdays where people already
+look: birthdays on the admin-only Team page only; local time and job title on the client
+list and a project's Team tab. A client viewer's member query was deliberately not widened,
+so clients still see no local time there. Also on this branch: the ungated admin
+mention-list query was narrowed to a new `MentionableUser` type, because `select('*')`
+against 024's wider `users` row would otherwise have shipped every admin's phone, birthday
+and bio to client viewers.
+
+**Deploy state: 024 is applied nowhere yet** — see "What Matthew still has to do" below.
+
 ### Decisions already made — don't relitigate
 
 - Password auth (not magic link) because corporate mail scanners burn single-use links;
@@ -114,6 +146,11 @@ items specifically:
 - ~~Apply 023 to dev and prod~~ — done 2026-09-18, tested on dev. (`app_settings` is a new
   table, so `NOTIFY pgrst, 'reload schema';` was needed after applying; when changing the
   window, reload the page — an open tab keeps the old number.)
+- **Apply 024 to dev, run the checklist, apply to prod, then merge — and
+  `NOTIFY pgrst, 'reload schema';` after each**, since the storage bucket and the new
+  columns are both new to PostgREST's cache. Apply prod immediately before merging rather
+  than hours earlier: the old code on `main` still selects `users.*` in one ungated place,
+  so the migration should reach prod right before, not long before, that code stops running.
 
 ---
 

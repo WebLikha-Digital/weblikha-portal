@@ -91,7 +91,13 @@ export function profileDraftError(draft: ProfileDraft, isClient: boolean): strin
   if (draft.birthdate) {
     const date = new Date(`${draft.birthdate}T00:00:00`)
     if (Number.isNaN(date.getTime())) return 'That birthday is not a valid date.'
-    if (date >= new Date()) return 'A birthday has to be in the past.'
+    // Compare dates, not a date against an instant: migration 024 enforces
+    // `birthdate < current_date`, so today must be rejected here too. Comparing
+    // against `new Date()` would accept today at any time past local midnight,
+    // and the database would then reject it with a message production redacts.
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    if (date >= today) return 'A birthday has to be in the past.'
   }
 
   if (isClient) {
@@ -99,6 +105,10 @@ export function profileDraftError(draft: ProfileDraft, isClient: boolean): strin
     if (!company) return 'Tell us which company you work for.'
     if (company.length > COMPANY_MAX) return `A company name is at most ${COMPANY_MAX} characters.`
 
+    // Validated trimmed, because the trimmed value is what gets stored. 024's
+    // users_company_website_format checks the raw column and does NOT btrim, so
+    // a caller that persists the untrimmed string would pass here and be
+    // rejected by the database — always write the trimmed value.
     const site = draft.companyWebsite.trim()
     if (site) {
       if (site.length > WEBSITE_MAX) return `A website address is at most ${WEBSITE_MAX} characters.`
@@ -135,7 +145,12 @@ export function timezoneOptions(): string[] {
   } catch {
     // fall through
   }
-  return fallback
+
+  // The browser's own zone may not be in this short list — without it the
+  // picker would quietly fall back to its first entry and save a zone the
+  // person never chose.
+  const own = detectTimezone()
+  return fallback.includes(own) ? fallback : [own, ...fallback]
 }
 
 /** "9:04 PM" in that person's zone, or null when we don't know it. */

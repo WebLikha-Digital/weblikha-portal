@@ -54,7 +54,8 @@ src/
 │   │   ├── projects/        Project list + [id] detail (tabs: todos, messages, team)
 │   │   │   ├── actions.ts                   Server Actions: tasks, comments, members, claim
 │   │   │   ├── message-actions.ts           Server Actions: create/update/delete messages + push
-│   │   │   └── message-category-actions.ts  Server Actions: create/update/reorder/archive/restore categories
+│   │   │   ├── message-category-actions.ts  Server Actions: create/update/reorder/archive/restore categories
+│   │   │   └── message-reply-actions.ts     Server Actions: create/update/delete replies
 │   │   ├── team/            Performance & leaderboard + members management
 │   │   │   └── actions.ts   Server Actions: admin points, member edits
 │   │   ├── clients/         Client management (admin only) — page pending, actions done
@@ -95,6 +96,7 @@ src/
 │   │                        imported from a client component. Callers must check admin.
 │   ├── site-url.ts          getSiteUrl() — NEXT_PUBLIC_SITE_URL → VERCEL_URL → localhost.
 │   │                        Every emailed link is built from this.
+│   ├── message-delivery.ts  Server-only push/email delivery shared by post and reply actions
 │   └── utils.ts             cn(), formatPeso(), formatDate(), formatDateShort(),
 │                            formatRelative(), daysUntil(), isOverdue(), clamp(),
 │                            percent(), getInitials(), truncate()
@@ -149,7 +151,7 @@ Tailwind is configured to map those tokens to utility classes. Enforced by the
 ## Database schema
 
 Postgres on Supabase. All tables have Row Level Security enabled. Schema is built up
-across `supabase/migrations/001` → `021` (see the migration log below). The
+across `supabase/migrations/001` → `022` (see the migration log below). The
 authoritative TypeScript mirror is `src/types/index.ts` — update it whenever a column
 changes.
 
@@ -173,12 +175,14 @@ messages            id, project_id, author_id, title, body (rich-text HTML), is_
                     category_id, mentions uuid[], timestamps
 message_categories  id, name, emoji, position, archived_at, timestamps (agency-wide;
                     admin-editable; archived not deleted)
+message_replies     id, message_id, author_id, body (rich-text HTML), mentions uuid[],
+                    timestamps (flat thread; visibility inherited from the post)
 performance_periods user_id, period_month, period_year, task_points, deadline_points,
                     admin_points, total_points (generated), admin_note, timestamps
 revenue_entries     id, project_id, type (income|expense), amount, date, note
 notifications       id, user_id, actor_id, type (mention|task_assigned|client_task|
-                    client_message|message_mention), project_id, task_id, comment_id,
-                    message_id, read_at, created_at
+                    client_message|message_mention|message_reply), project_id, task_id,
+                    comment_id, message_id, reply_id, read_at, created_at
 push_subscriptions  id, user_id, endpoint (unique), p256dh, auth, user_agent, timestamps
                     (one row per browser/device; owner-only RLS — server reads use
                     the service-role admin client in src/lib/supabase/admin.ts)
@@ -236,6 +240,7 @@ template_tasks          id, template_task_list_id, title, description, points_va
                                  client_message notifications)
 021 message categories + mentions (message_categories, messages.category_id/mentions,
     message_mention)
+022 message replies (message_replies, can_read_message, reply notifications)
 ```
 
 **Why 019 is out of chronological order.** Web push shipped first but was numbered 014 on a
@@ -288,7 +293,10 @@ Threshold for loyalty incentive: **1,000 pts/month**. Admin views/overrides `adm
   providers via the `notify_client_message` trigger; `projects/message-actions.ts` pushes
   to exactly those notification rows. Categories are readable by any approved user and
   editable only by admins. A @mention on an internal post never notifies a client
-  (notify_message_mentions).
+  (notify_message_mentions). Replies (022) inherit their post's visibility through
+  can_read_message(); a client can neither read nor write replies on an internal post.
+  A reply notifies the post's author and earlier repliers, and never notifies a client
+  on an internal post.
 - Revenue table: **admin only** — providers and clients never see financial data
 - **Budget caveat:** RLS is row-level. The `projects: member or admin` policy hands any
   member the whole row including `budget`, so client screens must read `client_projects`.

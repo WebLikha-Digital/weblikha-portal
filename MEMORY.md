@@ -41,8 +41,8 @@ five tabs; `MobileNav` renders the sidebar in its drawer.
 ### Stage 3 — message board
 
 Shipped — PR #6 merged 2026-09-18, production at `fa602ec`. Spec and plan:
-`docs/superpowers/{specs,plans}/2026-09-17-message-board*`. Posts
-only — replies are a later stage. Team members get a "Visible to client" switch, **off by
+`docs/superpowers/{specs,plans}/2026-09-17-message-board*`. Posts, plus a flat reply
+thread per post (migration 022, below). Team members get a "Visible to client" switch, **off by
 default**; the submit button reads "Post internally" / "Post to client". Clients have no
 switch. Visibility is locked after posting for every role (migration 020 trigger). Client
 posts notify approved admins and approved project providers (bell + push). The project
@@ -53,6 +53,11 @@ rich-text bodies via a shared `RichTextEditor`/`RichTextBody` also used by task 
 @mentions of project members and admins with bell, push and email; agency-wide
 admin-editable categories that archive rather than delete. Clients are never mentionable or
 notified on internal posts. Migration 021.
+
+Replies shipped 2026-09-18 (spec `docs/superpowers/specs/2026-09-18-message-replies-design.md`,
+migration 022): a flat thread per post, visibility inherited from the post, notifying the
+post's author and everyone already in the thread. Editing a reply notifies nobody, including
+for a newly added mention.
 
 ### Stage 4 — client experience (dashboard still to build)
 
@@ -99,6 +104,7 @@ items specifically:
   The order mattered: merging first would have shipped a bell query embedding `messages`
   through `notifications.message_id`, which errors on a database without 020/021 and empties
   every user's notification dropdown.
+- Apply 022 to dev, run the reply checklist, apply to prod, then merge.
 
 ---
 
@@ -318,8 +324,8 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
 
 ### The client portal's remaining work
 
-1. ~~**Stage 3 — the message board.**~~ Shipped 2026-09-18 (PR #6). Follow-up stage: replies
-   on messages. **Not yet exercised in a browser against the applied migrations** — the
+1. ~~**Stage 3 — the message board.**~~ Shipped 2026-09-18 (PR #6).
+   **Not yet exercised in a browser against the applied migrations** — the
    feature was gated on typecheck, build and review only, so the first real pass over
    formatting, image paste, mentions (incl. a client mentioned on an internal post),
    categories and legacy plain-text posts is still outstanding.

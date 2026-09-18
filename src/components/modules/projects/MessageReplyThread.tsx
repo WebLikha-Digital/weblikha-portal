@@ -30,7 +30,7 @@ import { RichTextBody } from '@/components/modules/editor/RichTextBody'
 import {
   createReply, deleteReply, updateReply,
 } from '@/app/(portal)/projects/message-reply-actions'
-import type { MessageReplyWithAuthor, ProjectMember, User, UserRole } from '@/types'
+import type { MessageReplyWithAuthor, ProjectMember, User, UserRole, MentionableUser } from '@/types'
 
 interface MessageReplyThreadProps {
   messageId:       string
@@ -40,7 +40,7 @@ interface MessageReplyThreadProps {
   currentUserId:   string
   viewerRole:      UserRole
   members:         (ProjectMember & { user: User })[]
-  admins:          User[]
+  admins:          MentionableUser[]
 }
 
 const EMPTY_VALUE: RichTextValue = { html: '', mentions: [], isEmpty: true, uploading: false }

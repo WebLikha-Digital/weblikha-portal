@@ -18,8 +18,7 @@ import { MessagesTab } from '@/components/modules/projects/MessagesTab'
 import { TeamTab } from '@/components/modules/projects/TeamTab'
 import type {
   TaskListWithTasks, MessageWithAuthor, MessageCategory,
-  User, ProjectTemplate, ProjectDetail, UserRole,
-} from '@/types'
+  User, ProjectTemplate, ProjectDetail, UserRole, MentionableUser } from '@/types'
 
 type Tab = 'todos' | 'messages' | 'team'
 
@@ -40,7 +39,7 @@ interface ProjectTabsLayoutProps {
   messages:         MessageWithAuthor[]
   categories:       MessageCategory[]
   members:          ProjectDetail['members']
-  admins:           User[]
+  admins:           MentionableUser[]
   availableMembers: User[]
   templates:        ProjectTemplate[]
   isAdmin:          boolean

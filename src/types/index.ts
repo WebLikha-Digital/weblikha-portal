@@ -45,6 +45,14 @@ export interface User {
   updated_at:      string
 }
 
+/**
+ * A person only ever rendered as "@name" — the mention lists and pickers.
+ * Deliberately narrow: the project page ships this list to EVERY viewer,
+ * clients included, so it must not carry phone, birthdate, bio or
+ * employment_type (migration 024 added the first three).
+ */
+export type MentionableUser = Pick<User, 'id' | 'name' | 'avatar_url' | 'role'>
+
 export interface Project {
   id:          string
   name:        string

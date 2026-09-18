@@ -13,12 +13,12 @@ import { Send } from 'lucide-react'
 import {
   RichTextEditor, type RichTextEditorHandle, type RichTextValue,
 } from '@/components/modules/editor/RichTextEditor'
-import type { ProjectMember, User } from '@/types'
+import type { ProjectMember, User, MentionableUser } from '@/types'
 
 interface CommentEditorProps {
   taskId:          string
   members:         (ProjectMember & { user: User })[]
-  admins:          User[]
+  admins:          MentionableUser[]
   onSubmit:        (html: string, mentions: string[]) => void
   onCancel?:       (() => void) | undefined
   initialContent?: string | undefined

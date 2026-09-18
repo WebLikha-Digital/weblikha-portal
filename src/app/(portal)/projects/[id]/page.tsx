@@ -13,7 +13,7 @@ import { ProjectTabsLayout } from '@/components/modules/projects/ProjectTabsLayo
 import { formatDate, formatPeso } from '@/lib/utils'
 import { ChevronRight, CalendarDays, Wallet } from 'lucide-react'
 import type {
-  ProjectDetail, ProjectSummary, TaskListWithTasks, MessageWithAuthor, MessageCategory,
+  ProjectDetail, ProjectSummary, TaskListWithTasks, MessageWithAuthor, MessageCategory, MentionableUser,
   User, ProjectTemplate, UserRole,
 } from '@/types'
 
@@ -85,8 +85,11 @@ export default async function ProjectDetailPage({ params }: Props) {
 
   // Admins are mentionable in every project even when not on the roster —
   // matches the recipient boundary notifyMentions enforces server-side
+  // Explicit columns, NOT select('*'): this query is ungated, so its rows reach
+  // every viewer of the page including clients. Migration 024 added phone,
+  // birthdate and bio to this table — none of that belongs in a mention list.
   const { data: adminUsers } = await supabase
-    .from('users').select('*')
+    .from('users').select('id, name, avatar_url, role')
     .eq('role', 'admin').eq('approved', true)
     .order('name', { ascending: true })
 
@@ -233,7 +236,7 @@ export default async function ProjectDetailPage({ params }: Props) {
         messages={messages}
         categories={categories}
         members={members}
-        admins={(adminUsers ?? []) as User[]}
+        admins={(adminUsers ?? []) as MentionableUser[]}
         availableMembers={availableMembers}
         templates={templates}
         isAdmin={isAdmin}

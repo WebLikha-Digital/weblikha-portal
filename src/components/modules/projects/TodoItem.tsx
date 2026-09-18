@@ -30,8 +30,7 @@ import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { canEditWithin } from '@/lib/messages'
 import { useEditWindow } from '@/components/layout/EditWindowProvider'
 import type {
-  TaskWithMeta, TaskStatus, TaskCommentWithAuthor, ProjectMember, User, UserRole,
-} from '@/types'
+  TaskWithMeta, TaskStatus, TaskCommentWithAuthor, ProjectMember, User, UserRole, MentionableUser } from '@/types'
 
 export interface TaskEditPatch {
   title:        string
@@ -61,7 +60,7 @@ interface TodoItemProps {
   projectId:    string
   members:       (ProjectMember & { user: User })[]
   /** Mentionable admins — mentionable in every project even when off the roster. */
-  admins:        User[]
+  admins:        MentionableUser[]
   /** Full viewer role — capabilities below are derived from this, not a single admin flag. */
   viewerRole:    UserRole
   currentUserId: string

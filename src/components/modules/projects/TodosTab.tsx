@@ -35,15 +35,14 @@ import { TodoItem, type TaskEditPatch } from '@/components/modules/projects/Todo
 import { withToast } from '@/components/ui/toast'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 import type {
-  TaskListWithTasks, TaskWithMeta, ProjectMember, User, ProjectTemplate, TaskStatus, UserRole,
-} from '@/types'
+  TaskListWithTasks, TaskWithMeta, ProjectMember, User, ProjectTemplate, TaskStatus, UserRole, MentionableUser } from '@/types'
 
 interface TodosTabProps {
   taskLists:     TaskListWithTasks[]
   projectId:     string
   currentUserId: string
   members:       (ProjectMember & { user: User })[]
-  admins:        User[]
+  admins:        MentionableUser[]
   templates:     ProjectTemplate[]
   /** Full viewer role — capabilities below are derived from this, not a single admin flag. */
   viewerRole:    UserRole

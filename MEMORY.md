@@ -406,10 +406,25 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
     lock. Existing rows already satisfy the widened list; run `validate constraint` off-peak
     if you want it marked valid.
 
+### Raised by the 022 review pass (2026-09-18), deliberately deferred
+
+22. **Notification deep links trust the caller's `projectId`.** `createMessage` and
+    `createReply` build the push/email URL from the `projectId` argument, which RLS never
+    checks against the post (it validates the message or reply id instead). A crafted call
+    could send real recipients a link to an unrelated project. Both triggers already know the
+    true `project_id` — reading it back beside the title would close it for both.
+23. **A reply (or post) by a deleted user shows "Edited" forever.** `ON DELETE SET NULL` on
+    `author_id` fires the `set_updated_at` trigger, so `updated_at > created_at`. Consistent
+    with posts since 002, so not new — but it will look wrong the first time someone notices.
+24. **`can_read_message()` (022) requires `approved = true`; the message policies it mirrors
+    do not.** A revoked-but-still-signed-in user can read a post directly through PostgREST
+    and get zero replies for it. Fail-closed and documented in the migration; the real fix is
+    to make approval consistent across 004/020's policies.
+
 ### Repo hygiene
 
-22. **`tsconfig.tsbuildinfo` is tracked** — a build artifact that dirties the tree on every
+25. **`tsconfig.tsbuildinfo` is tracked** — a build artifact that dirties the tree on every
     build. Wants a `.gitignore` entry plus `git rm --cached`.
-23. **No test framework at all.** Every change this session was gated on `npx tsc --noEmit`,
+26. **No test framework at all.** Every change this session was gated on `npx tsc --noEmit`,
     review, and manual checks. Adding one is a real decision that has never been made — not
     something to bolt on mid-feature.

@@ -91,7 +91,7 @@ export function OnboardingForm({ userId, name, isClient, avatarUrl }: Onboarding
           value={timezone}
           onChange={e => setTimezone(e.target.value)}
           disabled={isPending}
-          className="h-10 rounded-md border border-[var(--color-border-default)] bg-bg-surface-1 px-3 text-sm text-primary focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-50"
+          className="h-10 rounded-md border border-[var(--color-border-default)] bg-bg-surface-1 px-3 text-sm text-primary transition-colors duration-base hover:border-[var(--color-border-strong)] focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {zones.map(zone => <option key={zone} value={zone}>{zone}</option>)}
         </select>

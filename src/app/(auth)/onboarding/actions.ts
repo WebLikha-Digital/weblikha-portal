@@ -22,7 +22,13 @@ export async function completeOnboarding(input: {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('role').eq('id', user.id).single()
+    .from('users').select('role, onboarded_at').eq('id', user.id).single()
+
+  // Onboarding happens once. The UI never shows the form again, but this is a
+  // reachable endpoint — without this it would re-stamp onboarded_at and
+  // overwrite a profile the person has since edited on /profile.
+  if (profile?.onboarded_at) return
+
   const isClient = profile?.role === 'client'
 
   const problem = onboardingDraftError(input, isClient)

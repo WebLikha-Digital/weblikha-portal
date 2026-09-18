@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation'
 import { Resend } from 'resend'
 import { createClient } from '@/lib/supabase/server'
 import { getSiteUrl } from '@/lib/site-url'
+import { editWindowError } from '@/lib/messages'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -157,4 +158,31 @@ export async function deleteTemplateTask(id: string) {
   const supabase = await requireAdmin()
   await supabase.from('template_tasks').delete().eq('id', id)
   revalidatePath('/settings')
+}
+
+// Editing window
+
+/**
+ * Sets the agency-wide editing window. RLS restricts this to admins; the
+ * row-count check turns a non-admin's silent zero-row update into a real error.
+ */
+export async function updateEditWindow(minutes: number): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const problem = editWindowError(minutes)
+  if (problem) throw new Error(problem)
+
+  const { data, error } = await supabase
+    .from('app_settings')
+    .update({ edit_window_minutes: minutes })
+    .eq('id', 1)
+    .select('id')
+
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) throw new Error('Only admins can change the editing window.')
+
+  revalidatePath('/settings')
+  revalidatePath('/projects/[id]', 'page')
 }

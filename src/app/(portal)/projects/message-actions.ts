@@ -89,7 +89,20 @@ export async function updateMessage(
 
   if (error) throw new Error(error.message)
   const row = data?.[0]
-  if (!row) throw new Error('You can only edit your own messages.')
+  if (!row) {
+    // Zero rows means the RLS USING clause did not match — either it is not
+    // yours, or the editing window has closed. Read it back to say which.
+    const { data: existing } = await supabase
+      .from('messages')
+      .select('author_id')
+      .eq('id', messageId)
+      .maybeSingle()
+    throw new Error(
+      existing && existing.author_id === user.id
+        ? 'The editing window has closed.'
+        : 'You can only edit your own messages.',
+    )
+  }
 
   await deliverNotifications(row.id, row.title, projectId, row.updated_at)
 

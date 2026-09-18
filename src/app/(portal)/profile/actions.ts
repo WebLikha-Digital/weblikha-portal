@@ -10,7 +10,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { profileDraftError, type ProfileDraft } from '@/lib/profile'
+import { isValidAvatarUrl, profileDraftError, type ProfileDraft } from '@/lib/profile'
 
 export async function updateProfile(
   draft: ProfileDraft & { avatarUrl: string | null },
@@ -25,6 +25,10 @@ export async function updateProfile(
 
   const problem = profileDraftError(draft, isClient)
   if (problem) throw new Error(problem)
+
+  if (!isValidAvatarUrl(draft.avatarUrl, user.id)) {
+    throw new Error('That photo could not be saved.')
+  }
 
   const blank = (value: string) => (value.trim() === '' ? null : value.trim())
 

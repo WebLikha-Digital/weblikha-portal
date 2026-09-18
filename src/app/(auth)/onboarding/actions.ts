@@ -9,7 +9,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { onboardingDraftError } from '@/lib/profile'
+import { isValidAvatarUrl, onboardingDraftError } from '@/lib/profile'
 
 export async function completeOnboarding(input: {
   phone:     string
@@ -33,6 +33,10 @@ export async function completeOnboarding(input: {
 
   const problem = onboardingDraftError(input, isClient)
   if (problem) throw new Error(problem)
+
+  if (!isValidAvatarUrl(input.avatarUrl, user.id)) {
+    throw new Error('That photo could not be saved.')
+  }
 
   const { data, error } = await supabase
     .from('users')

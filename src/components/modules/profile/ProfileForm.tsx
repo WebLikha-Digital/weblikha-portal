@@ -60,9 +60,27 @@ export function ProfileForm({ user }: ProfileFormProps) {
     }
     setError(null)
 
+    // Mirrors what updateProfile actually persists (name.trim(), blank(phone), …).
+    // Sending this same trimmed payload and resyncing draft to it on success
+    // keeps `initial` (built from the refreshed, trimmed row) and `draft` in
+    // agreement — otherwise stray whitespace leaves `dirty` permanently true.
+    const blank = (value: string) => (value.trim() === '' ? '' : value.trim())
+    const payload: ProfileDraft = {
+      name:           draft.name.trim(),
+      phone:          blank(draft.phone),
+      timezone:       draft.timezone,
+      jobTitle:       blank(draft.jobTitle),
+      location:       blank(draft.location),
+      bio:            blank(draft.bio),
+      birthdate:      draft.birthdate,
+      company:        isClient ? blank(draft.company) : '',
+      companyWebsite: isClient ? blank(draft.companyWebsite) : '',
+    }
+
     startTransition(async () => {
       try {
-        await updateProfile({ ...draft, avatarUrl: avatar })
+        await updateProfile({ ...payload, avatarUrl: avatar })
+        setDraft(payload)
         toast.success('Profile saved.')
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not save your profile.')
@@ -175,7 +193,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
       </section>
 
       <div className="flex items-center gap-3 border-t border-subtle pt-5">
-        <Button type="submit" size="md" loading={isPending} disabled={!dirty}>
+        <Button type="submit" size="md" loading={isPending} disabled={!dirty || isPending}>
           Save changes
         </Button>
         {dirty && !isPending && (

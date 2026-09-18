@@ -118,6 +118,24 @@ export function profileDraftError(draft: ProfileDraft, isClient: boolean): strin
   return null
 }
 
+/**
+ * The `updateProfile` and `completeOnboarding` actions are callable directly,
+ * so the storage RLS scoping writes to `avatars/{user_id}/…` (migration 024)
+ * is not enough on its own — validate what actually gets persisted into
+ * `avatar_url` rather than trusting the caller's string. `userId` must come
+ * from the authenticated session, never from the caller's payload.
+ */
+export function isValidAvatarUrl(avatarUrl: string | null, userId: string): boolean {
+  if (avatarUrl === null) return true
+  let url: URL
+  try {
+    url = new URL(avatarUrl)
+  } catch {
+    return false
+  }
+  return url.protocol === 'https:' && url.pathname.includes(`/avatars/${userId}/`)
+}
+
 /** The browser's own zone, used to pre-select the picker. */
 export function detectTimezone(): string {
   try {

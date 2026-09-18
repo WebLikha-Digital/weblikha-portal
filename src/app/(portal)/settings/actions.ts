@@ -183,6 +183,7 @@ export async function updateEditWindow(minutes: number): Promise<void> {
   if (error) throw new Error(error.message)
   if (!data || data.length === 0) throw new Error('Only admins can change the editing window.')
 
-  revalidatePath('/settings')
-  revalidatePath('/projects/[id]', 'page')
+  // The window is read in the portal LAYOUT, so a page-level revalidation would
+  // not refresh it — every authenticated route sits under that layout.
+  revalidatePath('/', 'layout')
 }

@@ -150,7 +150,10 @@ export default async function ProjectDetailPage({ params }: Props) {
     .from('messages')
     // Explicit columns: users(*) shipped every author's email and
     // employment_type into clients' RSC payload.
-    .select('*, author: users(id, name, avatar_url, role), category: message_categories(id, name, emoji, archived_at)')
+    // Replies come down with their post: a project's threads are small and the
+    // page is already dynamic, so the thread needs no client-side fetch. They
+    // are sorted in MessageReplyThread rather than here.
+    .select('*, author: users(id, name, avatar_url, role), category: message_categories(id, name, emoji, archived_at), replies: message_replies(*, author: users(id, name, avatar_url, role))')
     .eq('project_id', id)
     .order('created_at', { ascending: false })
   if (messagesError) {

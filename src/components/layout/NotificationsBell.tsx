@@ -45,6 +45,8 @@ function describe(n: NotificationWithMeta): { lead: string; subject: string | nu
       }
     case 'message_mention':
       return { lead: ' mentioned you in ', subject: n.message?.title ?? 'a message' }
+    case 'message_reply':
+      return { lead: ' replied to ', subject: n.message?.title ?? 'a message' }
     default:
       return { lead: ` — new activity in ${n.project?.name ?? 'a project'}`, subject: null }
   }
@@ -124,7 +126,7 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
         .eq('id', n.id)
     }
     router.push(
-      (n.type === 'client_message' || n.type === 'message_mention') && n.message_id
+      (n.type === 'client_message' || n.type === 'message_mention' || n.type === 'message_reply') && n.message_id
         ? `/projects/${n.project_id}?tab=messages&message=${n.message_id}`
         : `/projects/${n.project_id}?tab=todos`,
     )
@@ -285,7 +287,7 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
                       <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-bg-surface-3 text-tertiary">
                         {n.type === 'mention' || n.type === 'message_mention'
                           ? <AtSign className="size-3" aria-hidden />
-                          : n.type === 'client_message'
+                          : n.type === 'client_message' || n.type === 'message_reply'
                             ? <MessageSquare className="size-3" aria-hidden />
                             : <ClipboardList className="size-3" aria-hidden />}
                       </span>

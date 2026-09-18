@@ -17,13 +17,16 @@ import { isEdited } from '@/lib/messages'
 import { deleteMessage } from '@/app/(portal)/projects/message-actions'
 import { RichTextBody } from '@/components/modules/editor/RichTextBody'
 import { MessageCategoryPill } from './MessageCategoryPill'
-import type { MessageWithAuthor, UserRole } from '@/types'
+import { MessageReplyThread } from './MessageReplyThread'
+import type { MessageWithAuthor, ProjectMember, User, UserRole } from '@/types'
 
 interface MessageDetailModalProps {
   message:       MessageWithAuthor
   projectId:     string
   viewerRole:    UserRole
   currentUserId: string
+  members:       (ProjectMember & { user: User })[]
+  admins:        User[]
   onClose:        () => void
   onEdit:         () => void
   onDeleteStart:  (messageId: string) => void
@@ -35,6 +38,8 @@ export function MessageDetailModal({
   projectId,
   viewerRole,
   currentUserId,
+  members,
+  admins,
   onClose,
   onEdit,
   onDeleteStart,
@@ -134,6 +139,17 @@ export function MessageDetailModal({
           </div>
 
           <RichTextBody body={message.body} size="sm" />
+
+          <MessageReplyThread
+            messageId={message.id}
+            projectId={projectId}
+            replies={message.replies}
+            isClientVisible={message.is_client_visible}
+            currentUserId={currentUserId}
+            viewerRole={viewerRole}
+            members={members}
+            admins={admins}
+          />
         </div>
 
         {canManage && (

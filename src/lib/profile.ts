@@ -124,16 +124,43 @@ export function profileDraftError(draft: ProfileDraft, isClient: boolean): strin
  * is not enough on its own — validate what actually gets persisted into
  * `avatar_url` rather than trusting the caller's string. `userId` must come
  * from the authenticated session, never from the caller's payload.
+ *
+ * The protocol + path check alone is not enough either: it never looks at the
+ * host, so `https://attacker.example/x/avatars/{userId}/y.png` passed. Every
+ * colleague who views that person's profile, comments or mentions then fetches
+ * that URL — a tracking pixel pointed at coworkers and admins. Require the
+ * host to be this project's own Supabase project, and the path to be an actual
+ * public-bucket object URL, not just something containing "/avatars/{id}/".
+ *
+ * `NEXT_PUBLIC_SUPABASE_URL` is a NEXT_PUBLIC_ var, so it is bundled into the
+ * client AND available in the server runtime (same var already read directly
+ * in lib/supabase/server.ts, client.ts and admin.ts) — no fetch, no await
+ * needed here. A missing or unparseable value fails closed (rejects) rather
+ * than throwing, so a misconfigured env does not crash a profile save.
  */
 export function isValidAvatarUrl(avatarUrl: string | null, userId: string): boolean {
   if (avatarUrl === null) return true
+
   let url: URL
   try {
     url = new URL(avatarUrl)
   } catch {
     return false
   }
-  return url.protocol === 'https:' && url.pathname.includes(`/avatars/${userId}/`)
+  if (url.protocol !== 'https:') return false
+
+  const supabaseUrlRaw = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrlRaw) return false
+  let supabaseUrl: URL
+  try {
+    supabaseUrl = new URL(supabaseUrlRaw)
+  } catch {
+    return false
+  }
+  if (url.host !== supabaseUrl.host) return false
+
+  const expectedPrefix = `/storage/v1/object/public/avatars/${userId}/`
+  return url.pathname.startsWith(expectedPrefix)
 }
 
 /** The browser's own zone, used to pre-select the picker. */

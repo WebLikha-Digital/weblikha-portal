@@ -20,6 +20,21 @@
 -- whenever, an admin deletes anything. A delete is visible — the row is gone —
 -- whereas a late edit rewrites history silently. No delete policy is touched.
 --
+-- 6. created_at is the whole basis of within_edit_window(), so it has to be
+--    pinned on both ends or the feature is decorative:
+--      - UPDATE: messages and task_comments had no immutable-columns guard at
+--        all (022 already added one for message_replies). An author could
+--        PATCH their own row via PostgREST with a future created_at — the
+--        author_id = auth.uid() check does not stop that — and their window
+--        would never close. guard_message_immutable_columns() (020) is
+--        recreated here to also reject a changed created_at, and
+--        guard_task_comment_immutable_columns() is new.
+--      - INSERT: created_at only *defaults* to now(); an explicit value in
+--        the insert payload overrides a default, so nothing stopped a
+--        far-future created_at at post time either. force_created_at_now(),
+--        one shared BEFORE INSERT trigger function on messages, task_comments
+--        and message_replies, pins it for every non-service-role insert.
+--
 -- Apply with: npx supabase db push --db-url $env:DB_URL   (dev first, then prod)
 -- Safe to re-run.
 -- =============================================================================
@@ -107,7 +122,57 @@ comment on function public.within_edit_window(timestamptz) is
 -- 004's "messages: admin all" is FOR ALL — that is the policy that let an admin
 -- edit a client's post. Replaced by three narrower ones. Admin READ and DELETE
 -- are unchanged in effect; only the silent-rewrite power goes away.
+--
+-- guard_message_immutable_columns() (020) is superseded here: same checks on
+-- is_client_visible, project_id and author_id, plus a new one on created_at.
+-- 020 already attaches this function BEFORE UPDATE on messages
+-- (messages_guard_immutable_columns), so recreating the function is enough —
+-- no second trigger to create.
 -- =============================================================================
+
+create or replace function public.guard_message_immutable_columns()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  if new.is_client_visible is distinct from old.is_client_visible then
+    raise exception 'Message visibility cannot be changed after posting.'
+      using errcode = '42501';
+  end if;
+
+  if new.project_id is distinct from old.project_id then
+    raise exception 'A message cannot be moved to another project.'
+      using errcode = '42501';
+  end if;
+
+  if new.author_id is distinct from old.author_id and new.author_id is not null then
+    raise exception 'A message''s author cannot be changed.'
+      using errcode = '42501';
+  end if;
+
+  if new.created_at is distinct from old.created_at then
+    raise exception 'A message''s timestamp cannot be changed.'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function public.guard_message_immutable_columns() is
+  'Blocks changes to messages.is_client_visible / project_id / author_id / created_at after insert, for every role. Allows service-role statements and ON DELETE SET NULL on author_id. Superseded from 020 in 023 to add the created_at check that closes the edit-window forgery path.';
+
+-- 020 already created this trigger; left here only so the CREATE OR REPLACE
+-- above is guaranteed to be wired up even if 023 is applied out of order.
+drop trigger if exists messages_guard_immutable_columns on public.messages;
+create trigger messages_guard_immutable_columns
+  before update on public.messages
+  for each row execute function public.guard_message_immutable_columns();
 
 drop policy if exists "messages: admin all" on public.messages;
 
@@ -146,7 +211,49 @@ create policy "messages: author updates own in window"
 -- =============================================================================
 -- 4. TASK COMMENTS
 -- 008's "task_comments: admin all" is the same FOR ALL hole.
+--
+-- task_comments has never had an immutable-columns guard at all — unlike
+-- messages (020) and message_replies (022), nothing stopped task_id,
+-- author_id or created_at from being rewritten on UPDATE. Added now, same
+-- shape as the other two.
 -- =============================================================================
+
+create or replace function public.guard_task_comment_immutable_columns()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  if new.task_id is distinct from old.task_id then
+    raise exception 'A comment cannot be moved to another task.'
+      using errcode = '42501';
+  end if;
+
+  if new.author_id is distinct from old.author_id and new.author_id is not null then
+    raise exception 'A comment''s author cannot be changed.'
+      using errcode = '42501';
+  end if;
+
+  if new.created_at is distinct from old.created_at then
+    raise exception 'A comment''s timestamp cannot be changed.'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function public.guard_task_comment_immutable_columns() is
+  'Blocks changes to task_comments.task_id / author_id / created_at after insert, for every role. Allows service-role statements and ON DELETE SET NULL on author_id.';
+
+drop trigger if exists task_comments_guard_immutable_columns on public.task_comments;
+create trigger task_comments_guard_immutable_columns
+  before update on public.task_comments
+  for each row execute function public.guard_task_comment_immutable_columns();
 
 drop policy if exists "task_comments: admin all" on public.task_comments;
 
@@ -195,6 +302,53 @@ create policy "message_replies: update own"
 
 
 -- =============================================================================
+-- 6. INSERT-TIME FORGERY
+--
+-- The UPDATE guards above close one half of the hole; the other half is at
+-- INSERT. created_at only *defaults* to now() — an explicit created_at in the
+-- insert payload overrides a column default, so an author could post with a
+-- far-future created_at and their edit window would never close, no UPDATE
+-- required. One shared function, attached BEFORE INSERT on all three tables:
+-- a single place to reason about "can created_at be forged," instead of three
+-- near-duplicates. Same auth.uid() is null bypass as the UPDATE guards, so
+-- service-role inserts (data fixes, backfills, seed scripts) keep whatever
+-- created_at they pass.
+-- =============================================================================
+
+create or replace function public.force_created_at_now()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() is not null then
+    new.created_at := now();
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function public.force_created_at_now() is
+  'Forces created_at to now() on insert for every non-service-role caller, so an explicit created_at in the request payload cannot override the column default and pre-date or post-date a row. Attached to messages, task_comments and message_replies — every table within_edit_window() governs.';
+
+drop trigger if exists messages_force_created_at_now on public.messages;
+create trigger messages_force_created_at_now
+  before insert on public.messages
+  for each row execute function public.force_created_at_now();
+
+drop trigger if exists task_comments_force_created_at_now on public.task_comments;
+create trigger task_comments_force_created_at_now
+  before insert on public.task_comments
+  for each row execute function public.force_created_at_now();
+
+drop trigger if exists message_replies_force_created_at_now on public.message_replies;
+create trigger message_replies_force_created_at_now
+  before insert on public.message_replies
+  for each row execute function public.force_created_at_now();
+
+
+-- =============================================================================
 -- DONE
 -- After running: NOTIFY pgrst, 'reload schema';
 --
@@ -207,4 +361,10 @@ create policy "message_replies: update own"
 --   - Set edit_window_minutes to 1, wait, PATCH again → 0 rows.
 --   - As a non-admin, PATCH app_settings → rejected.
 --   - Admin delete of anyone's message and comment still works.
+--   - As the author, PATCH your own message with a future created_at → rejected
+--     (A message's timestamp cannot be changed.); same for task_comments and
+--     message_replies.
+--   - As the author, INSERT a message/task_comment/message_reply with an
+--     explicit far-future or far-past created_at in the payload → stored row
+--     has created_at = now(), not the submitted value.
 -- =============================================================================

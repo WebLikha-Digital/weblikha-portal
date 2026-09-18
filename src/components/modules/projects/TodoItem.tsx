@@ -514,7 +514,7 @@ export function TodoItem({
                     {canEditComment && !isEditing && (
                       <button
                         onClick={() => setEditingCommentId(comment.id)}
-                        className="p-0.5 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover/comment:opacity-100"
+                        className="p-0.5 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover/comment:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:opacity-70"
                         title="Edit comment"
                       >
                         <Pencil className="size-3" />
@@ -523,7 +523,7 @@ export function TodoItem({
                     {canDelete && !isEditing && (
                       <button
                         onClick={() => handleDeleteComment(comment.id)}
-                        className="p-0.5 rounded text-tertiary hover:text-danger transition-all opacity-100 sm:opacity-0 sm:group-hover/comment:opacity-100"
+                        className="p-0.5 rounded text-tertiary hover:text-danger transition-all opacity-100 sm:opacity-0 sm:group-hover/comment:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:opacity-70"
                         title="Delete comment"
                       >
                         <Trash2 className="size-3" />

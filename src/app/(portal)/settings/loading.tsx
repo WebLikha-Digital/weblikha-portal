@@ -20,6 +20,18 @@ export default function SettingsLoading() {
           </div>
         ))}
       </div>
+      {/* Editing window section */}
+      <div className="mb-10 space-y-3">
+        <div className="h-3 w-16 bg-bg-surface-3 rounded" />
+        <div className="card px-4 py-3 space-y-3">
+          <div className="h-3 w-32 bg-bg-surface-3 rounded" />
+          <div className="h-2.5 w-56 bg-bg-surface-3 rounded" />
+          <div className="flex gap-2">
+            <div className="h-9 w-20 bg-bg-surface-3 rounded-md" />
+            <div className="h-9 w-16 bg-bg-surface-3 rounded-md" />
+          </div>
+        </div>
+      </div>
       {/* Templates section */}
       <div className="space-y-3">
         <div className="h-3 w-40 bg-bg-surface-3 rounded" />

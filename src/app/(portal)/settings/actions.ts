@@ -167,9 +167,7 @@ export async function deleteTemplateTask(id: string) {
  * row-count check turns a non-admin's silent zero-row update into a real error.
  */
 export async function updateEditWindow(minutes: number): Promise<void> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const supabase = await requireAdmin()
 
   const problem = editWindowError(minutes)
   if (problem) throw new Error(problem)

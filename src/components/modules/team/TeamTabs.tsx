@@ -16,11 +16,13 @@ interface ProjectStats {
 }
 
 interface Props {
-  providers:    User[]
-  periods:      PerformancePeriod[]
-  projectStats: ProjectStats[]
-  month:        number
-  year:         number
+  providers:       User[]
+  periods:         PerformancePeriod[]
+  projectStats:    ProjectStats[]
+  /** user_id → birthdate (migration 024's user_private — see MembersTab). */
+  birthdateByUser: Record<string, string | null>
+  month:           number
+  year:            number
 }
 
 const TABS: { key: Tab; label: string }[] = [
@@ -28,7 +30,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'members',     label: 'Members' },
 ]
 
-export function TeamTabs({ providers, periods, projectStats, month, year }: Props) {
+export function TeamTabs({ providers, periods, projectStats, birthdateByUser, month, year }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('leaderboard')
 
   return (
@@ -65,6 +67,7 @@ export function TeamTabs({ providers, periods, projectStats, month, year }: Prop
           providers={providers}
           periods={periods}
           projectStats={projectStats}
+          birthdateByUser={birthdateByUser}
         />
       )}
     </div>

@@ -165,8 +165,13 @@ changes.
 users               id, email, name, role (admin|provider|client), specialty,
                     skills text[] (skills[0] = primary; specialty is legacy),
                     employment_type (in-house|outsource), avatar_url, approved, timestamps,
-                    phone, birthdate, timezone, job_title, location, bio, company,
-                    company_website, onboarded_at
+                    timezone, job_title, location, bio, company, company_website,
+                    onboarded_at. Deliberately does NOT carry phone or birthdate — see
+                    user_private below.
+user_private        user_id (PK, → users), phone, birthdate, updated_at. Split out of
+                    users (migration 024) because "users: approved members read
+                    directory" (013) makes every column of users readable by any
+                    approved member — RLS here restricts rows to their owner + admins.
 projects            id, name, client_name, status (discovery|in_progress|review|
                     completed|archived), start_date, end_date, budget, description, created_by
 project_members     id, project_id, user_id, role_in_project, joined_at  (join table)
@@ -326,6 +331,10 @@ Threshold for loyalty incentive: **1,000 pts/month**. Admin views/overrides `adm
   `avatars` storage bucket is public to read, but insert/update/delete are scoped to
   `avatars/{their own id}/…` — unlike `comment-attachments`, which is bucket-wide (see
   @MEMORY.md → "Not done yet" #18).
+- **`phone` and `birthdate` live in `user_private`, not `users`** — because 013's "approved
+  members read directory" policy makes every column of `users` readable by any approved
+  member, and those two are not agency-wide information the way a job title or a timezone
+  is. `user_private` is readable and writable only by its owner or an admin.
 
 ---
 

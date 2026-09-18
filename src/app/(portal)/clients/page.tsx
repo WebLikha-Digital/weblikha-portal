@@ -28,11 +28,12 @@ export default async function ClientsPage() {
 
   const { data: clientsRaw } = await supabase
     .from('users')
-    .select('id, email, name, role, specialty, skills, employment_type, avatar_url, approved, phone, timezone, job_title, company, created_at, updated_at')
+    .select('id, email, name, role, specialty, skills, employment_type, avatar_url, approved, timezone, job_title, company, created_at, updated_at')
     .eq('role', 'client')
     .order('name', { ascending: true })
 
-  const clients = (clientsRaw ?? []) as User[]
+  const clients   = (clientsRaw ?? []) as User[]
+  const clientIds = clients.map(c => c.id)
 
   // Every project, including archived ones. Filtering archived here would drop
   // the chip for a client already assigned to one; the picker filters instead.
@@ -42,7 +43,6 @@ export default async function ClientsPage() {
     .order('name', { ascending: true })
 
   const allProjects = (projectsRaw ?? []) as PickerProject[]
-  const clientIds   = clients.map(c => c.id)
 
   const memberships = clientIds.length > 0
     ? (await supabase
@@ -50,6 +50,16 @@ export default async function ClientsPage() {
         .select('user_id, project_id')
         .in('user_id', clientIds)).data ?? []
     : []
+
+  // phone lives in user_private (migration 024), not on users — 013's
+  // "approved members read directory" policy makes every column of users
+  // readable by any approved member, so phone cannot live there. This page
+  // is admin-only, so user_private's "owner or admin" policy lets this read
+  // every client's row.
+  const { data: privateRaw } = clientIds.length > 0
+    ? await supabase.from('user_private').select('user_id, phone').in('user_id', clientIds)
+    : { data: [] as { user_id: string; phone: string | null }[] }
+  const phoneByUser = new Map((privateRaw ?? []).map(p => [p.user_id, p.phone]))
 
   const setupState = await fetchClientSetupState(clientIds)
 
@@ -64,6 +74,7 @@ export default async function ClientsPage() {
 
   const rows: ClientRow[] = clients.map(c => ({
     user:     c,
+    phone:    phoneByUser.get(c.id) ?? null,
     projects: byUser.get(c.id) ?? [],
     status:   deriveStatus(c.approved, setupState.get(c.id) ?? null),
   }))

@@ -20,23 +20,28 @@ import type { User } from '@/types'
 
 interface ProfileFormProps {
   user: User
+  /** From user_private (migration 024) — see profile/page.tsx. Not on User:
+   *  013's directory policy makes every users column readable by any
+   *  approved member, so these two live in their own owner/admin-only table. */
+  phone:     string | null
+  birthdate: string | null
 }
 
-export function ProfileForm({ user }: ProfileFormProps) {
+export function ProfileForm({ user, phone, birthdate }: ProfileFormProps) {
   const zones = useMemo(() => timezoneOptions(), [])
   const isClient = user.role === 'client'
 
   const initial: ProfileDraft = useMemo(() => ({
     name:           user.name,
-    phone:          user.phone           ?? '',
+    phone:          phone     ?? '',
     timezone:       user.timezone        ?? '',
     jobTitle:       user.job_title       ?? '',
     location:       user.location        ?? '',
     bio:            user.bio             ?? '',
-    birthdate:      user.birthdate       ?? '',
+    birthdate:      birthdate ?? '',
     company:        user.company         ?? '',
     companyWebsite: user.company_website ?? '',
-  }), [user])
+  }), [user, phone, birthdate])
 
   const [draft, setDraft]   = useState<ProfileDraft>(initial)
   const [avatar, setAvatar] = useState<string | null>(user.avatar_url)

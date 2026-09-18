@@ -117,7 +117,7 @@ export function ClientList({ rows, allProjects }: ClientListProps) {
 
   return (
     <div className="space-y-2">
-      {optimisticRows.map(({ user, projects, status }) => {
+      {optimisticRows.map(({ user, phone, projects, status }) => {
         const meta = STATUS_META[status]
         return (
           <div
@@ -134,7 +134,7 @@ export function ClientList({ rows, allProjects }: ClientListProps) {
               <p className="text-2xs text-secondary truncate">{user.email}</p>
               <div className="flex flex-wrap items-center gap-x-2 text-2xs text-tertiary">
                 {user.company && <span className="truncate">{user.company}</span>}
-                {user.phone   && <span className="whitespace-nowrap">{user.phone}</span>}
+                {phone        && <span className="whitespace-nowrap">{phone}</span>}
               </div>
               <PersonMeta timezone={user.timezone} jobTitle={user.job_title} />
 
@@ -157,7 +157,7 @@ export function ClientList({ rows, allProjects }: ClientListProps) {
                 size="sm"
                 variant="ghost"
                 icon={<FolderCog className="size-3.5" />}
-                onClick={() => setManaging({ user, projects, status })}
+                onClick={() => setManaging({ user, phone, projects, status })}
               >
                 Manage projects
               </Button>
@@ -176,7 +176,7 @@ export function ClientList({ rows, allProjects }: ClientListProps) {
                   variant="ghost"
                   icon={<Mail className="size-3.5" />}
                   loading={busyId === user.id}
-                  onClick={() => handleResend({ user, projects, status })}
+                  onClick={() => handleResend({ user, phone, projects, status })}
                   {...(status === 'active' ? { className: 'text-tertiary' } : {})}
                 >
                   {status === 'active' ? 'Send reset link' : 'Resend'}
@@ -188,7 +188,7 @@ export function ClientList({ rows, allProjects }: ClientListProps) {
                   variant="outline"
                   icon={<RotateCcw className="size-3.5" />}
                   loading={busyId === user.id}
-                  onClick={() => handleRestore({ user, projects, status })}
+                  onClick={() => handleRestore({ user, phone, projects, status })}
                 >
                   Restore
                 </Button>
@@ -198,7 +198,7 @@ export function ClientList({ rows, allProjects }: ClientListProps) {
                   variant="ghost"
                   icon={<Ban className="size-3.5" />}
                   loading={busyId === user.id}
-                  onClick={() => handleRevoke({ user, projects, status })}
+                  onClick={() => handleRevoke({ user, phone, projects, status })}
                   className="text-tertiary hover:text-danger hover:bg-danger/10"
                 >
                   Revoke

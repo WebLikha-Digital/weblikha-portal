@@ -36,12 +36,10 @@ export async function updateProfile(
     .from('users')
     .update({
       name:            draft.name.trim(),
-      phone:           blank(draft.phone),
       timezone:        draft.timezone,
       job_title:       blank(draft.jobTitle),
       location:        blank(draft.location),
       bio:             blank(draft.bio),
-      birthdate:       draft.birthdate || null,
       company:         isClient ? blank(draft.company) : null,
       company_website: isClient ? blank(draft.companyWebsite) : null,
       avatar_url:      draft.avatarUrl,
@@ -51,6 +49,20 @@ export async function updateProfile(
 
   if (error) throw new Error(error.message)
   if (!data || data.length === 0) throw new Error('Could not save your profile. Try again.')
+
+  // phone and birthdate live in user_private (migration 024), not on users —
+  // see the header comment there. These two writes are not atomic: if this
+  // second one fails, the rest of the profile has already saved but phone
+  // and birthdate have not — throw so the caller sees a failure rather than
+  // a silent partial save.
+  const { error: privateError } = await supabase
+    .from('user_private')
+    .upsert(
+      { user_id: user.id, phone: blank(draft.phone), birthdate: draft.birthdate || null },
+      { onConflict: 'user_id' },
+    )
+
+  if (privateError) throw new Error(privateError.message)
 
   // The sidebar and every avatar in the portal read this row.
   revalidatePath('/', 'layout')

@@ -41,7 +41,6 @@ export async function completeOnboarding(input: {
   const { data, error } = await supabase
     .from('users')
     .update({
-      phone:        input.phone.trim(),
       timezone:     input.timezone,
       company:      isClient ? input.company.trim() : null,
       avatar_url:   input.avatarUrl,
@@ -52,6 +51,18 @@ export async function completeOnboarding(input: {
 
   if (error) throw new Error(error.message)
   if (!data || data.length === 0) throw new Error('Could not save your details. Try again.')
+
+  // phone lives in user_private (migration 024), not on users — see the
+  // header comment there. These two writes are not atomic: if this second
+  // one fails, users.onboarded_at is already set (so the welcome screen will
+  // not show again) but the phone number was not saved. Throwing surfaces
+  // that to the caller as a failure rather than a silent partial save; the
+  // person can fix it on /profile afterward.
+  const { error: privateError } = await supabase
+    .from('user_private')
+    .upsert({ user_id: user.id, phone: input.phone.trim() }, { onConflict: 'user_id' })
+
+  if (privateError) throw new Error(privateError.message)
 
   revalidatePath('/', 'layout')
 }

@@ -22,6 +22,18 @@ export default async function ProfilePage() {
     .from('users').select('*').eq('id', authUser.id).single()
   if (!profile) redirect('/login?error=profile_missing')
 
+  // phone and birthdate live in user_private (migration 024), not on users —
+  // 013's "approved members read directory" policy makes every users column
+  // readable by any approved member, so those two cannot live there. Reading
+  // one's own row is always allowed by user_private's "owner or admin"
+  // policy. maybeSingle(): a person who has never saved either field has no
+  // row yet.
+  const { data: privateRow } = await supabase
+    .from('user_private')
+    .select('phone, birthdate')
+    .eq('user_id', authUser.id)
+    .maybeSingle()
+
   return (
     <div className="p-4 sm:p-6 max-w-5xl">
       <div className="mb-8">
@@ -31,7 +43,11 @@ export default async function ProfilePage() {
         </p>
       </div>
 
-      <ProfileForm user={profile as User} />
+      <ProfileForm
+        user={profile as User}
+        phone={privateRow?.phone ?? null}
+        birthdate={privateRow?.birthdate ?? null}
+      />
     </div>
   )
 }

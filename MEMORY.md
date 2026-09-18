@@ -77,11 +77,26 @@ with "Added by client" badges; template apply hidden; Team tab shows **names and
 
 Not part of the client-portal stages above — a separate feature on
 `feature/onboarding-profiles`. Migration `024_user_profiles.sql` adds nullable profile
-columns to `users` (`phone`, `birthdate`, `timezone`, `job_title`, `location`, `bio`,
-`company`, `company_website`, `onboarded_at`) with CHECK constraints, a
-`guard_user_timezone()` trigger rejecting a non-IANA zone, and an `avatars` storage bucket
-(public read; insert/update/delete scoped to `avatars/{own id}/…`). No new RLS on `users` —
-016's guard still blocks writing `role`, `approved` or `email` through the same update.
+columns to `users` (`timezone`, `job_title`, `location`, `bio`, `company`,
+`company_website`, `onboarded_at`) with CHECK constraints, a `guard_user_timezone()` trigger
+rejecting a non-IANA zone, and an `avatars` storage bucket (public read; insert/update/delete
+scoped to `avatars/{own id}/…`, size capped at 2 MB and MIME restricted to jpeg/png/webp at
+the bucket level, not just in the upload component). No new RLS on `users` — 016's guard
+still blocks writing `role`, `approved` or `email` through the same update.
+
+**Privacy fix, same migration, before it was ever applied anywhere:** `phone` and
+`birthdate` do NOT live on `users`. 013's "approved members read directory" policy grants
+SELECT on every column of `users` to any approved member (load-bearing — mentions, member
+pickers), so anything added to `users` is readable agency-wide the moment it exists. A phone
+number and a full date of birth are not that kind of information. Both now live in a new
+`public.user_private` table (`user_id` PK → `users`, `phone`, `birthdate`, `updated_at`),
+readable/writable only by its own owner or an admin. `completeOnboarding` and
+`updateProfile` write `users` first, then upsert `user_private` — the two writes are not
+atomic, so a failed second write throws rather than reporting success. `ProfileForm` takes
+`phone`/`birthdate` as explicit props (read separately by `/profile`'s page from
+`user_private`) rather than off its `user: User` prop. `ClientList` and `MembersTab` read the
+same way — `ClientRow.phone` and a `birthdateByUser` lookup, threaded down from
+`/clients` and `/team`'s page components — instead of off `User`.
 
 `/onboarding` (in `(auth)`) is a one-screen form — photo optional, phone, timezone
 pre-filled from the browser, company for clients — gated by a redirect in
@@ -100,8 +115,9 @@ look: birthdays on the admin-only Team page only; local time and job title on th
 list and a project's Team tab. A client viewer's member query was deliberately not widened,
 so clients still see no local time there. Also on this branch: the ungated admin
 mention-list query was narrowed to a new `MentionableUser` type, because `select('*')`
-against 024's wider `users` row would otherwise have shipped every admin's phone, birthday
-and bio to client viewers.
+against 024's wider `users` row would otherwise have shipped every admin's bio to client
+viewers (phone and birthdate were never at risk here — see the privacy fix above, they were
+never selectable through `MentionableUser`'s source query in the first place).
 
 **Deploy state: 024 is applied nowhere yet** — see "What Matthew still has to do" below.
 

@@ -146,7 +146,6 @@ async function deliverNotifications(
       url,
     })
     await emailMentions(admin, mentionRecipients, {
-      actorName,
       subject: `${actorName} mentioned you in "${title}"`,
       heading: `${actorName} mentioned you`,
       line:    `You were mentioned in the message <strong style="color:#ffffff;">${escapeHtml(title)}</strong>.`,

@@ -51,16 +51,23 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
-/** Emails the people a trigger decided to notify about a mention. */
+/**
+ * Emails the people a trigger decided to notify about a mention.
+ *
+ * `subject` and `heading` are plain text — this function escapes `heading`
+ * before it reaches the HTML. `line` is the opposite: it is inserted as HTML so
+ * a caller can bold part of it, which means **the caller must run escapeHtml()
+ * over every user-supplied fragment inside it.** Escaping it twice renders
+ * `&amp;` to the reader, so do not pre-escape `heading` as well.
+ */
 export async function emailMentions(
   admin: AdminClient,
   userIds: string[],
   content: {
-    actorName: string
-    subject:   string
-    heading:   string
-    line:      string
-    path:      string
+    subject: string
+    heading: string
+    line:    string
+    path:    string
   },
 ): Promise<void> {
   if (userIds.length === 0) return

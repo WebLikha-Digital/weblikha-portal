@@ -60,7 +60,7 @@ as $$
 $$;
 
 comment on function public.can_read_message(uuid) is
-  'True when the caller may read this post: approved admin, or approved project member (a client only when the post is client-visible). Reply policies are written in terms of this, so reading and replying cannot drift apart. Mirrors 020''s per-role message policies.';
+  'True when the caller may read this post: approved admin, or approved project member (a client only when the post is client-visible). Reply policies are written in terms of this, so reading and replying cannot drift apart. Mirrors 020''s per-role message policies, but is stricter: it also requires u.approved = true, which 004''s "messages: admin all" and 020''s provider/client read policies do not check. That is deliberate, fail-closed behaviour, not a bug to reconcile — approval is otherwise only an app-layer gate in (portal)/layout.tsx, and replies deliberately do not trust it. Consequence: a revoked-but-still-signed-in user can read a post directly through PostgREST yet get zero rows from message_replies for it.';
 
 
 -- =============================================================================
@@ -102,6 +102,10 @@ create index if not exists idx_message_replies_thread
   on public.message_replies (message_id, created_at);
 create index if not exists idx_message_replies_author_id
   on public.message_replies (author_id);
+-- Serves notify_message_reply_thread's per-candidate "has this user already
+-- replied in this thread?" exists() check (message_id + author_id together).
+create index if not exists idx_message_replies_message_author
+  on public.message_replies (message_id, author_id);
 
 drop trigger if exists message_replies_set_updated_at on public.message_replies;
 create trigger message_replies_set_updated_at
@@ -111,8 +115,9 @@ create trigger message_replies_set_updated_at
 
 -- =============================================================================
 -- 3. IMMUTABLE COLUMNS (mirrors 020 §1)
--- A reply cannot be moved to another post or reattributed. author_id changing
--- TO NULL is allowed: that is ON DELETE SET NULL firing.
+-- A reply cannot be moved to another post, reattributed, or have its timestamp
+-- changed — the thread is ordered by created_at. author_id changing TO NULL is
+-- allowed: that is ON DELETE SET NULL firing.
 -- =============================================================================
 
 create or replace function public.guard_message_reply_immutable_columns()
@@ -132,6 +137,11 @@ begin
 
   if new.author_id is distinct from old.author_id and new.author_id is not null then
     raise exception 'A reply''s author cannot be changed.'
+      using errcode = '42501';
+  end if;
+
+  if new.created_at is distinct from old.created_at then
+    raise exception 'A reply''s timestamp cannot be changed.'
       using errcode = '42501';
   end if;
 
@@ -186,6 +196,9 @@ create policy "message_replies: delete own"
     and public.can_read_message(message_id)
   );
 
+-- Admins can delete any reply (moderation) but deliberately cannot edit someone
+-- else's words — there is no admin update policy here, unlike posts, where
+-- 004's "messages: admin all" grants full CRUD.
 drop policy if exists "message_replies: admin deletes any" on public.message_replies;
 create policy "message_replies: admin deletes any"
   on public.message_replies for delete

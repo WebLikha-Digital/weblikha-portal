@@ -111,7 +111,11 @@ items specifically:
   through `notifications.message_id`, which errors on a database without 020/021 and empties
   every user's notification dropdown.
 - Apply 022 to dev, run the reply checklist, apply to prod, then merge.
-- Apply 023 to dev, run the checklist, apply to prod, then merge.
+- Apply 023 to dev, run the checklist, apply to prod, then merge. Two things to remember
+  while doing it: (a) `app_settings` is a new table, so run `NOTIFY pgrst, 'reload schema';`
+  right after applying — PostgREST won't see it otherwise and the portal silently falls back
+  to the 15-minute default; (b) when testing a change to the window, reload the page — an
+  already-open tab keeps the old number until it reloads, which otherwise looks like a bug.
 
 ---
 

@@ -27,10 +27,6 @@ export function EditWindowCard({ minutes }: EditWindowCardProps) {
   const dirty   = value.trim() !== String(minutes)
 
   function save() {
-    if (problem) {
-      toast.error(problem)
-      return
-    }
     startTransition(async () => {
       await withToast(async () => {
         await updateEditWindow(parsed)
@@ -59,16 +55,13 @@ export function EditWindowCard({ minutes }: EditWindowCardProps) {
             value={value}
             onChange={e => setValue(e.target.value)}
             disabled={isPending}
+            {...(dirty && problem ? { error: problem } : {})}
           />
         </div>
         <Button size="md" onClick={save} loading={isPending} disabled={!dirty || problem !== null}>
           Save
         </Button>
       </div>
-
-      {dirty && problem && (
-        <p role="alert" className="mt-2 text-2xs text-danger">{problem}</p>
-      )}
     </div>
   )
 }

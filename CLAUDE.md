@@ -306,7 +306,12 @@ Threshold for loyalty incentive: **1,000 pts/month**. Admin views/overrides `adm
   within_edit_window(created_at) holds (default 15 minutes, set agency-wide in Settings).
   Migration 023 removed the FOR ALL admin policies on messages (004) and task_comments
   (008) that let an admin rewrite other people's words; admins keep read and delete.
-  Deleting is not time-limited.
+  `created_at` is also immutable on messages, task comments and replies — a
+  `force_created_at_now()` BEFORE INSERT trigger pins it on all three, closing the insert-time
+  half of the same forgery. 023 recreates `guard_message_immutable_columns()` with a
+  `created_at` check added; 020 still contains the older three-column version verbatim, so a
+  future edit must start from 023's copy, not 020's, or the created_at check silently
+  disappears again. Deleting is not time-limited.
 - Revenue table: **admin only** — providers and clients never see financial data
 - **Budget caveat:** RLS is row-level. The `projects: member or admin` policy hands any
   member the whole row including `budget`, so client screens must read `client_projects`.

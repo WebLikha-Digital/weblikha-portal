@@ -42,6 +42,9 @@
 -- undeletable.
 -- =============================================================================
 
+-- Superseded by 023, which adds a created_at check on top of this. Edit 023's
+-- version, not this one — recreating this function from here would silently
+-- reopen the edit-window forgery hole 023 closes.
 create or replace function public.guard_message_immutable_columns()
 returns trigger
 language plpgsql

@@ -77,11 +77,15 @@ create trigger app_settings_set_updated_at
 alter table public.app_settings enable row level security;
 
 -- Every approved user reads it: the UI needs the number to decide whether to
--- render an Edit button.
+-- render an Edit button. is_admin() is OR'd in explicitly: admins are exempt
+-- from the approval gate in (portal)/layout.tsx, so an admin row with
+-- approved = false would otherwise read zero rows here and silently fall back
+-- to the 15-minute default while the database enforces whatever value is
+-- actually configured.
 drop policy if exists "app_settings: approved read" on public.app_settings;
 create policy "app_settings: approved read"
   on public.app_settings for select
-  using (public.is_approved_member());
+  using (public.is_approved_member() or public.is_admin());
 
 drop policy if exists "app_settings: admin updates" on public.app_settings;
 create policy "app_settings: admin updates"

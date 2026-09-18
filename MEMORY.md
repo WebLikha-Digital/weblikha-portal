@@ -8,9 +8,9 @@ Last synced 2026-09-18.
 ## Current focus: the client portal
 
 Mid-build. Stages 1 and 2 are **done, deployed to prod, and the invite flow is tested end
-to end on both dev and prod**. **Stage 3 (the message board) is built on
-`feature/message-board`; migrations 020 + 021 are applied on dev and prod, so the branch
-is ready to merge** — see below. Stage 4's client
+to end on both dev and prod**. **Stage 3 (the message board) is shipped: merged
+via PR #6 and deployed to production, with migrations 020 + 021 applied to dev and prod
+first** — see below. Stage 4's client
 dashboard is still missing — see the table below for exactly what of Stage 4 already
 landed, and "Not done yet" at the bottom of this file for the full backlog.
 
@@ -21,7 +21,7 @@ landed, and "Not done yet" at the bottom of this file for the full backlog.
 | — | Migration 014 (client collab) + types | ✅ Applied to **dev and prod**, and recorded in both history tables since the 2026-09-17 cleanup |
 | 1 | Invite + set-password auth | ✅ Done and **tested end to end on dev AND prod** — invite → email → `/auth/confirm` → set password → dashboard |
 | 2 | `/clients` admin page + nav | ✅ Done, merged (PR #3), deployed to prod |
-| 3 | Message board | ✅ Built on `feature/message-board`: compose/edit/delete, default-internal visibility switch, client posts notify the team, URL deep links |
+| 3 | Message board | ✅ Shipped (PR #6, merged 2026-09-18, prod at `fa602ec`): compose/edit/delete, default-internal visibility switch, client posts notify the team, URL deep links, rich text + @mentions + categories |
 | 4 | Client dashboard + project view | 🟡 Partial: client nav set, `/rewards` guard, to-do capability gates, Team tab names-and-roles-only, "empty to-do list" query fix. **The client dashboard itself is not built.** |
 | — | Verification pass | 🟡 015–018 applied to dev **and** prod. PRs #3 and #4 merged; prod deployed at `27ab19d`. The four client-portal findings were fixed in code but **not individually re-tested** against the applied migrations. |
 
@@ -40,7 +40,8 @@ five tabs; `MobileNav` renders the sidebar in its drawer.
 
 ### Stage 3 — message board
 
-Built. Spec and plan: `docs/superpowers/{specs,plans}/2026-09-17-message-board*`. Posts
+Shipped — PR #6 merged 2026-09-18, production at `fa602ec`. Spec and plan:
+`docs/superpowers/{specs,plans}/2026-09-17-message-board*`. Posts
 only — replies are a later stage. Team members get a "Visible to client" switch, **off by
 default**; the submit button reads "Post internally" / "Post to client". Clients have no
 switch. Visibility is locked after posting for every role (migration 020 trigger). Client
@@ -317,8 +318,11 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
 
 ### The client portal's remaining work
 
-1. ~~**Stage 3 — the message board.**~~ Built 2026-09-17 — see the Stage 3 section above.
-   Follow-up stage: replies on messages.
+1. ~~**Stage 3 — the message board.**~~ Shipped 2026-09-18 (PR #6). Follow-up stage: replies
+   on messages. **Not yet exercised in a browser against the applied migrations** — the
+   feature was gated on typecheck, build and review only, so the first real pass over
+   formatting, image paste, mentions (incl. a client mentioned on an internal post),
+   categories and legacy plain-text posts is still outstanding.
 2. **Stage 4 — the client dashboard itself.** Not built. Should carry: project cards with
    status + progress, the client's own open requests, recent shared messages, and upcoming +
    overdue deadlines. A client currently lands on `/dashboard` and gets the **provider**

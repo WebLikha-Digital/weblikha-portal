@@ -142,6 +142,13 @@ export interface MessageCategory {
   updated_at:  string
 }
 
+/** Agency-wide portal settings — exactly one row (migration 023). */
+export interface AppSettings {
+  id:                  number
+  edit_window_minutes: number
+  updated_at:          string
+}
+
 /** A reply on a message board post (migration 022). Flat — no nesting. */
 export interface MessageReply {
   id:         string

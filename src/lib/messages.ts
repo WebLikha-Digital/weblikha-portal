@@ -15,6 +15,12 @@ export const MESSAGE_MENTIONS_MAX = 50
 export const CATEGORY_NAME_MAX    = 40
 export const CATEGORY_EMOJI_MAX   = 16
 
+// Editing window (migration 023). Mirrors app_settings_edit_window_bounds —
+// change them together.
+export const EDIT_WINDOW_DEFAULT_MINUTES = 15
+export const EDIT_WINDOW_MIN_MINUTES     = 1
+export const EDIT_WINDOW_MAX_MINUTES     = 1440
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export interface MessageDraft {
@@ -119,4 +125,27 @@ export function plainTextToHtml(text: string): string {
 /** updated_at equals created_at on insert; migration 002's trigger bumps it on every update. */
 export function isEdited(message: { created_at: string; updated_at: string }): boolean {
   return new Date(message.updated_at).getTime() > new Date(message.created_at).getTime()
+}
+
+/** Returns a human-readable problem with a proposed window, or null. */
+export function editWindowError(minutes: number): string | null {
+  if (!Number.isInteger(minutes)) return 'Enter a whole number of minutes.'
+  if (minutes < EDIT_WINDOW_MIN_MINUTES || minutes > EDIT_WINDOW_MAX_MINUTES) {
+    return `The window must be between ${EDIT_WINDOW_MIN_MINUTES} and ${EDIT_WINDOW_MAX_MINUTES} minutes.`
+  }
+  return null
+}
+
+/**
+ * Is a row posted at `createdAt` still editable by its author?
+ *
+ * The browser's clock decides what the UI offers; `within_edit_window()` in the
+ * database decides what is allowed. A skewed clock can therefore show an Edit
+ * button that fails on save — which the Server Actions report as "The editing
+ * window has closed." rather than failing silently.
+ */
+export function canEditWithin(createdAt: string, windowMinutes: number): boolean {
+  const posted = new Date(createdAt).getTime()
+  if (Number.isNaN(posted)) return false
+  return Date.now() < posted + windowMinutes * 60_000
 }

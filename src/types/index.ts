@@ -31,6 +31,16 @@ export interface User {
   employment_type: EmploymentType
   avatar_url:      string | null
   approved:        boolean
+  // Profile (migration 024). All optional — a half-filled profile is normal.
+  phone:           string | null
+  birthdate:       string | null    // ISO date (YYYY-MM-DD)
+  timezone:        string | null    // IANA zone, e.g. Asia/Manila
+  job_title:       string | null
+  location:        string | null
+  bio:             string | null
+  company:         string | null    // clients only
+  company_website: string | null    // clients only
+  onboarded_at:    string | null    // null → /onboarding
   created_at:      string
   updated_at:      string
 }

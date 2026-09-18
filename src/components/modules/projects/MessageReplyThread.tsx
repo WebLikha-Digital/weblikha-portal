@@ -12,7 +12,7 @@
  * delete. The database is the real gate; this only decides what to show.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { Pencil, Send, Trash2 } from 'lucide-react'
 import { Avatar } from '@/components/ui'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
@@ -79,6 +79,14 @@ export function MessageReplyThread({
     () => [...replies].sort((a, b) => a.created_at.localeCompare(b.created_at)),
     [replies],
   )
+
+  // An open edit blocks every other row's Edit button, and its own Cancel lives
+  // inside that row. If the reply disappears — someone else deleted it, and a
+  // revalidate pushed a fresh list — the row unmounts and the thread would stay
+  // locked with nothing left to click. Release it.
+  useEffect(() => {
+    if (editingId && !ordered.some(r => r.id === editingId)) setEditing(null)
+  }, [editingId, ordered])
 
   function submitNew() {
     if (draft.uploading) {

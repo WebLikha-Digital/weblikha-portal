@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ApprovalQueue } from '@/components/modules/settings/ApprovalQueue'
 import { TemplateBuilder } from '@/components/modules/settings/TemplateBuilder'
+import { EditWindowCard } from '@/components/modules/settings/EditWindowCard'
+import { EDIT_WINDOW_DEFAULT_MINUTES } from '@/lib/messages'
 import type { ProjectTemplateWithLists, User } from '@/types'
 
 export const metadata: Metadata = { title: 'Settings' }
@@ -46,6 +48,13 @@ export default async function SettingsPage() {
       })),
   }))
 
+  const { data: settings } = await supabase
+    .from('app_settings')
+    .select('edit_window_minutes')
+    .eq('id', 1)
+    .maybeSingle()
+  const editWindowMinutes = settings?.edit_window_minutes ?? EDIT_WINDOW_DEFAULT_MINUTES
+
   return (
     <div className="p-4 sm:p-6 max-w-5xl">
       <div className="mb-8">
@@ -66,6 +75,14 @@ export default async function SettingsPage() {
           )}
         </div>
         <ApprovalQueue pending={pending} />
+      </section>
+
+      {/* Editing window */}
+      <section className="mb-10">
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-sm font-medium text-primary">Content</h2>
+        </div>
+        <EditWindowCard minutes={editWindowMinutes} />
       </section>
 
       {/* Task List Templates */}

@@ -72,7 +72,19 @@ export async function updateReply(
     .select('id')
 
   if (error) throw new Error(error.message)
-  if (!data || data.length === 0) throw new Error('You can only edit your own replies.')
+  if (!data || data.length === 0) {
+    // Zero rows: not yours, or out of time. Read it back to say which.
+    const { data: existing } = await supabase
+      .from('message_replies')
+      .select('author_id')
+      .eq('id', replyId)
+      .maybeSingle()
+    throw new Error(
+      existing && existing.author_id === user.id
+        ? 'The editing window has closed.'
+        : 'You can only edit your own replies.',
+    )
+  }
 
   revalidatePath(`/projects/${projectId}`)
 }

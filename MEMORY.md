@@ -59,6 +59,12 @@ migration 022): a flat thread per post, visibility inherited from the post, noti
 post's author and everyone already in the thread. Editing a reply notifies nobody, including
 for a newly added mention.
 
+Editing tightened 2026-09-18 (spec `docs/superpowers/specs/2026-09-18-edit-window-design.md`,
+migration 023): only the author may edit a post, reply or task comment, and only inside an
+agency-wide window (default 15 minutes, Settings → Content). Admins lost the FOR ALL write
+power that let them edit other people's content; they keep delete. Everything posted before
+023 is past the window, so it is no longer editable.
+
 ### Stage 4 — client experience (dashboard still to build)
 
 Third nav set (no Revenue / Rewards / Team). Client dashboard carries: project cards with
@@ -104,7 +110,10 @@ items specifically:
   The order mattered: merging first would have shipped a bell query embedding `messages`
   through `notifications.message_id`, which errors on a database without 020/021 and empties
   every user's notification dropdown.
-- Apply 022 to dev, run the reply checklist, apply to prod, then merge.
+- ~~Apply 022 to dev and prod~~ — done 2026-09-18, tested on dev.
+- ~~Apply 023 to dev and prod~~ — done 2026-09-18, tested on dev. (`app_settings` is a new
+  table, so `NOTIFY pgrst, 'reload schema';` was needed after applying; when changing the
+  window, reload the page — an open tab keeps the old number.)
 
 ---
 
@@ -115,7 +124,7 @@ Live on Vercel with separate production Supabase project `vhsuyouczctnkvnnjzgg` 
 vars; service role scoped to Production. A `supabase-keepalive-ping` scheduled task pings
 both projects every 3 days.
 
-**Migration state:** 001–021 applied on **both** dev and prod (020 + 021 applied 2026-09-18, before the message-board branch merged).
+**Migration state:** 001–023 applied on **both** dev and prod (020–023 applied 2026-09-18, each before the branch that needed it merged).
 
 **Migration cleanup (2026-09-17).** Two files had both been numbered 014 — web push and
 client collaboration, written on branches that never saw each other. Web push moved to

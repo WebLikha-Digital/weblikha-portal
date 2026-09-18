@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { Sidebar } from '@/components/layout/sidebar'
 import { MobileNav } from '@/components/layout/MobileNav'
 import { MobileTabBar } from '@/components/layout/MobileTabBar'
+import { EditWindowProvider } from '@/components/layout/EditWindowProvider'
 import { Toaster } from '@/components/ui/toast'
 import { ConfirmHost } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
@@ -19,11 +20,12 @@ import type { User } from '@/types'
 const STORAGE_KEY = 'weblikha-sidebar-collapsed'
 
 interface PortalShellProps {
-  user:     User
-  children: React.ReactNode
+  user:              User
+  editWindowMinutes: number
+  children:          React.ReactNode
 }
 
-export function PortalShell({ user, children }: PortalShellProps) {
+export function PortalShell({ user, editWindowMinutes, children }: PortalShellProps) {
   const [collapsed, setCollapsed] = useState(false)
 
   // Restore preference after mount (avoids SSR hydration mismatch)
@@ -56,7 +58,7 @@ export function PortalShell({ user, children }: PortalShellProps) {
           collapsed ? 'md:ml-16' : 'md:ml-[200px]',
         )}
       >
-        {children}
+        <EditWindowProvider minutes={editWindowMinutes}>{children}</EditWindowProvider>
       </main>
 
       <MobileTabBar user={user} />

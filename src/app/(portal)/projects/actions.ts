@@ -604,16 +604,25 @@ export async function updateTaskComment(
   // Snapshot previous mentions so only newly added people get emailed
   const { data: existing } = await supabase
     .from('task_comments')
-    .select('mentions, task_id')
+    .select('mentions, task_id, author_id')
     .eq('id', commentId)
     .single()
 
-  // RLS: only the author (or admin) can update; others match zero rows
-  const { error } = await supabase
+  // RLS: only the author, and only inside the editing window (023). A mismatch
+  // returns zero rows WITHOUT an error, so check the count and say which.
+  const { data, error } = await supabase
     .from('task_comments')
     .update({ body: trimmed, mentions })
     .eq('id', commentId)
+    .select('id')
   if (error) throw new Error(error.message)
+  if (!data || data.length === 0) {
+    throw new Error(
+      existing && existing.author_id === user.id
+        ? 'The editing window has closed.'
+        : 'You can only edit your own comments.',
+    )
+  }
 
   if (existing) {
     const previous    = existing.mentions ?? []

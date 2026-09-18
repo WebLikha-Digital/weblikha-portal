@@ -18,7 +18,8 @@ import { Avatar } from '@/components/ui'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { toast, withToast } from '@/components/ui/toast'
 import { cn, formatRelative } from '@/lib/utils'
-import { isEdited, replyDraftError } from '@/lib/messages'
+import { canEditWithin, isEdited, replyDraftError } from '@/lib/messages'
+import { useEditWindow } from '@/components/layout/EditWindowProvider'
 import {
   RichTextEditor,
   type MentionCandidate,
@@ -62,6 +63,7 @@ export function MessageReplyThread({
   const [, startTransition]     = useTransition()
 
   const isAdmin = viewerRole === 'admin'
+  const editWindowMinutes = useEditWindow()
 
   // Same rule as the compose modal: members + admins, clients dropped when the
   // post is internal, so the UI never offers a mention the trigger discards.
@@ -169,6 +171,7 @@ export function MessageReplyThread({
         {ordered.map(reply => {
           const isAuthor  = reply.author_id === currentUserId
           const canDelete = isAuthor || isAdmin
+          const canEdit   = isAuthor && canEditWithin(reply.created_at, editWindowMinutes)
           const busy      = busyId === reply.id
 
           return (
@@ -188,9 +191,9 @@ export function MessageReplyThread({
                     {isEdited(reply) && ' · Edited'}
                   </span>
 
-                  {canDelete && editingId !== reply.id && (
+                  {(canDelete || canEdit) && editingId !== reply.id && (
                     <span className="ml-auto flex items-center gap-0.5 opacity-100 sm:opacity-0 transition-opacity duration-150 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
-                      {isAuthor && (
+                      {canEdit && (
                         <button
                           type="button"
                           className={iconButton}

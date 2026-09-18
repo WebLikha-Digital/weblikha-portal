@@ -11,6 +11,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { PortalShell } from '@/components/layout/PortalShell'
+import { EDIT_WINDOW_DEFAULT_MINUTES } from '@/lib/messages'
 import type { User } from '@/types'
 
 export default async function PortalLayout({
@@ -47,5 +48,22 @@ export default async function PortalLayout({
 
   const user = profile as User
 
-  return <PortalShell user={user}>{children}</PortalShell>
+  // Agency-wide editing window (023). Non-essential to rendering: if it cannot
+  // be read, fall back to the default rather than failing every page. The
+  // database enforces the real rule either way.
+  const { data: settings, error: settingsError } = await supabase
+    .from('app_settings')
+    .select('edit_window_minutes')
+    .eq('id', 1)
+    .maybeSingle()
+  if (settingsError) {
+    console.error('[portal] app_settings fetch failed — using the default window:', settingsError)
+  }
+  const editWindowMinutes = settings?.edit_window_minutes ?? EDIT_WINDOW_DEFAULT_MINUTES
+
+  return (
+    <PortalShell user={user} editWindowMinutes={editWindowMinutes}>
+      {children}
+    </PortalShell>
+  )
 }

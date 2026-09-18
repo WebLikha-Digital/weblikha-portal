@@ -27,6 +27,8 @@ import { CommentEditor } from '@/components/modules/projects/CommentEditor'
 import { CommentBody } from '@/components/modules/projects/CommentBody'
 import { withToast } from '@/components/ui/toast'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { canEditWithin } from '@/lib/messages'
+import { useEditWindow } from '@/components/layout/EditWindowProvider'
 import type {
   TaskWithMeta, TaskStatus, TaskCommentWithAuthor, ProjectMember, User, UserRole,
 } from '@/types'
@@ -134,6 +136,7 @@ export function TodoItem({
   // Gates that are genuinely admin-only keep reading this exactly as before.
   const isAdmin  = viewerRole === 'admin'
   const isClient = viewerRole === 'client'
+  const editWindowMinutes = useEditWindow()
 
   const isDone     = task.status === 'done'
   const inProgress = task.status === 'in_progress'
@@ -483,6 +486,8 @@ export function TodoItem({
             const isTemp     = comment.id.startsWith('temp-')
             const isAuthor   = comment.author_id === currentUserId
             const canDelete  = !isTemp && (isAdmin || isAuthor)
+            const canEditComment = isAuthor && !isTemp
+              && canEditWithin(comment.created_at, editWindowMinutes)
             const wasEdited  = comment.updated_at !== comment.created_at
             const isEditing  = editingCommentId === comment.id
 
@@ -506,10 +511,10 @@ export function TodoItem({
                       {wasEdited && ' · edited'}
                     </span>
                     {isTemp && <SavingIndicator />}
-                    {isAuthor && !isTemp && !isEditing && (
+                    {canEditComment && !isEditing && (
                       <button
                         onClick={() => setEditingCommentId(comment.id)}
-                        className="p-0.5 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover/comment:opacity-100"
+                        className="p-0.5 rounded text-tertiary hover:text-primary transition-all opacity-100 sm:opacity-0 sm:group-hover/comment:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:opacity-70"
                         title="Edit comment"
                       >
                         <Pencil className="size-3" />
@@ -518,7 +523,7 @@ export function TodoItem({
                     {canDelete && !isEditing && (
                       <button
                         onClick={() => handleDeleteComment(comment.id)}
-                        className="p-0.5 rounded text-tertiary hover:text-danger transition-all opacity-100 sm:opacity-0 sm:group-hover/comment:opacity-100"
+                        className="p-0.5 rounded text-tertiary hover:text-danger transition-all opacity-100 sm:opacity-0 sm:group-hover/comment:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:opacity-70"
                         title="Delete comment"
                       >
                         <Trash2 className="size-3" />

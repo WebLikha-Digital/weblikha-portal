@@ -25,11 +25,11 @@ const buttonVariants = cva(
         /** Yellow CTA — use for primary actions */
         primary: 'bg-brand text-brand-fg hover:bg-brand-hover active:scale-[0.98]',
         /** Transparent with subtle border — secondary actions */
-        outline: 'border border-[var(--color-border-default)] text-primary hover:bg-bg-overlay',
+        outline: 'border border-[var(--color-border-default)] text-primary hover:bg-bg-overlay active:scale-[0.98]',
         /** No border, no background — tertiary / inline actions */
-        ghost:   'text-secondary hover:text-primary hover:bg-bg-overlay',
+        ghost:   'text-secondary hover:text-primary hover:bg-bg-overlay active:scale-[0.98]',
         /** Destructive — use sparingly, only for irreversible actions */
-        danger:  'bg-danger-bg text-danger-fg border border-danger hover:bg-danger hover:text-bg-base',
+        danger:  'bg-danger-bg text-danger-fg border border-danger hover:bg-danger hover:text-bg-base active:scale-[0.98]',
       },
       size: {
         sm: 'h-7  px-3  text-xs',

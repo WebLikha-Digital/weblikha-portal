@@ -53,15 +53,24 @@ export function ConfirmHost() {
     resolver = null
   }
 
-  // Focus Cancel (the safe action) on open; Escape dismisses
+  // Focus Cancel (the safe action) on open; Escape dismisses.
+  // Capture phase + stopPropagation: document keydown listeners fire in
+  // registration order, so a modal mounted underneath this dialog (which also
+  // listens for Escape in the bubble phase) would otherwise handle Escape
+  // first and close itself too. A capture-phase listener on document always
+  // runs before any bubble-phase document listener, and stopping propagation
+  // here keeps the key event from reaching them.
   useEffect(() => {
     if (!opts) return
     cancelRef.current?.focus()
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') close(false)
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        close(false)
+      }
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opts])
 

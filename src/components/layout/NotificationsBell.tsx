@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, BellRing, CheckCheck, AtSign, ClipboardList } from 'lucide-react'
+import { Bell, BellRing, CheckCheck, AtSign, ClipboardList, MessageSquare } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui'
 import { cn, formatRelative } from '@/lib/utils'
@@ -29,6 +29,25 @@ const PUSH_DISMISSED_KEY = 'weblikha-push-dismissed'
 interface NotificationsBellProps {
   variant:    'sidebar' | 'header'
   collapsed?: boolean
+}
+
+/** Explicit per type, so a new type is never mislabelled as an assignment. */
+function describe(n: NotificationWithMeta): { lead: string; subject: string | null } {
+  switch (n.type) {
+    case 'mention':
+      return { lead: ' mentioned you in ', subject: n.task?.title ?? 'a task' }
+    case 'task_assigned':
+      return { lead: ' assigned you ', subject: n.task?.title ?? 'a task' }
+    case 'client_message':
+      return {
+        lead:    ` posted in ${n.project?.name ?? 'a project'}: `,
+        subject: n.message?.title ?? 'a message',
+      }
+    case 'message_mention':
+      return { lead: ' mentioned you in ', subject: n.message?.title ?? 'a message' }
+    default:
+      return { lead: ` — new activity in ${n.project?.name ?? 'a project'}`, subject: null }
+  }
 }
 
 export function NotificationsBell({ variant, collapsed = false }: NotificationsBellProps) {
@@ -46,7 +65,7 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
     const [listRes, countRes] = await Promise.all([
       supabase
         .from('notifications')
-        .select('*, actor:users!notifications_actor_id_fkey(id, name, avatar_url), task:tasks(id, title)')
+        .select('*, actor:users!notifications_actor_id_fkey(id, name, avatar_url), task:tasks(id, title), message:messages(id, title), project:projects(id, name)')
         .order('created_at', { ascending: false })
         .limit(15),
       supabase
@@ -54,8 +73,20 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
         .select('*', { count: 'exact', head: true })
         .is('read_at', null),
     ])
-    if (listRes.data) setItems(listRes.data as unknown as NotificationWithMeta[])
-    if (typeof countRes.count === 'number') setUnread(countRes.count)
+    // Log code + message explicitly: the Next.js dev overlay renders a
+    // PostgrestError object as `{}`, which hid a missing-migration error.
+    if (listRes.error) {
+      const { code, message } = listRes.error
+      console.error(`[notifications] list fetch failed: ${code} ${message}`)
+    } else if (listRes.data) {
+      setItems(listRes.data as unknown as NotificationWithMeta[])
+    }
+    if (countRes.error) {
+      const { code, message } = countRes.error
+      console.error(`[notifications] unread count fetch failed: ${code} ${message}`)
+    } else if (typeof countRes.count === 'number') {
+      setUnread(countRes.count)
+    }
   }, [])
 
   useEffect(() => {
@@ -92,7 +123,11 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
         .update({ read_at: now })
         .eq('id', n.id)
     }
-    router.push(`/projects/${n.project_id}?tab=todos`)
+    router.push(
+      (n.type === 'client_message' || n.type === 'message_mention') && n.message_id
+        ? `/projects/${n.project_id}?tab=messages&message=${n.message_id}`
+        : `/projects/${n.project_id}?tab=todos`,
+    )
   }
 
   async function markAllRead() {
@@ -148,7 +183,8 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
         <button
           onClick={() => setOpen(v => { if (!v) void load(); return !v })}
           className={cn(
-            'flex w-full items-center gap-2.5 rounded-md py-2 text-sm transition-colors duration-fast',
+            'flex w-full items-center gap-2.5 rounded-md py-2 text-sm transition-colors duration-fast active:opacity-80',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
             collapsed ? 'justify-center px-2' : 'px-3',
             open ? 'bg-bg-overlay text-primary' : 'text-secondary hover:bg-bg-overlay hover:text-primary',
           )}
@@ -165,7 +201,8 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
         <button
           onClick={() => setOpen(v => { if (!v) void load(); return !v })}
           className={cn(
-            'relative p-1.5 rounded-md transition-colors',
+            'relative p-1.5 rounded-md transition-colors active:opacity-80',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
             open ? 'text-primary bg-bg-overlay' : 'text-secondary hover:text-primary hover:bg-bg-overlay',
           )}
           aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ''}`}
@@ -193,7 +230,7 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
               <button
                 onClick={markAllRead}
                 disabled={marking || unread === 0}
-                className="flex items-center gap-1 text-2xs text-secondary hover:text-brand disabled:opacity-40 disabled:hover:text-secondary transition-colors"
+                className="flex items-center gap-1 rounded text-2xs text-secondary hover:text-brand active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40 disabled:hover:text-secondary transition-colors"
                 title="Mark all as read"
               >
                 <CheckCheck className="size-3.5" aria-hidden />
@@ -230,43 +267,51 @@ export function NotificationsBell({ variant, collapsed = false }: NotificationsB
                 </p>
               )}
 
-              {items.map(n => (
-                <button
-                  key={n.id}
-                  onClick={() => openItem(n)}
-                  className={cn(
-                    'flex w-full items-start gap-2.5 px-4 py-3 text-left border-b border-subtle last:border-b-0 transition-colors hover:bg-bg-surface-2',
-                    !n.read_at && 'bg-brand/5',
-                  )}
-                >
-                  {n.actor ? (
-                    <Avatar name={n.actor.name} src={n.actor.avatar_url} size="xs" />
-                  ) : (
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-bg-surface-3 text-tertiary">
-                      {n.type === 'mention'
-                        ? <AtSign className="size-3" aria-hidden />
-                        : <ClipboardList className="size-3" aria-hidden />}
-                    </span>
-                  )}
+              {items.map(n => {
+                const { lead, subject } = describe(n)
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => openItem(n)}
+                    className={cn(
+                      'flex w-full items-start gap-2.5 px-4 py-3 text-left border-b border-subtle last:border-b-0 transition-colors hover:bg-bg-surface-2 active:bg-bg-surface-3',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset',
+                      !n.read_at && 'bg-brand/5',
+                    )}
+                  >
+                    {n.actor ? (
+                      <Avatar name={n.actor.name} src={n.actor.avatar_url} size="xs" />
+                    ) : (
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-bg-surface-3 text-tertiary">
+                        {n.type === 'mention' || n.type === 'message_mention'
+                          ? <AtSign className="size-3" aria-hidden />
+                          : n.type === 'client_message'
+                            ? <MessageSquare className="size-3" aria-hidden />
+                            : <ClipboardList className="size-3" aria-hidden />}
+                      </span>
+                    )}
 
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs text-secondary leading-snug">
-                      <span className="font-medium text-primary">{n.actor?.name ?? 'Someone'}</span>
-                      {n.type === 'mention' ? ' mentioned you in ' : ' assigned you '}
-                      <span className="font-medium text-primary">
-                        &ldquo;{n.task?.title ?? 'a task'}&rdquo;
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs text-secondary leading-snug break-words">
+                        <span className="font-medium text-primary">{n.actor?.name ?? 'Someone'}</span>
+                        {lead}
+                        {subject !== null && (
+                          <span className="font-medium text-primary">
+                            &ldquo;{subject}&rdquo;
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-0.5 block text-2xs text-tertiary">
+                        {formatRelative(n.created_at)}
                       </span>
                     </span>
-                    <span className="mt-0.5 block text-2xs text-tertiary">
-                      {formatRelative(n.created_at)}
-                    </span>
-                  </span>
 
-                  {!n.read_at && (
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand" aria-label="Unread" />
-                  )}
-                </button>
-              ))}
+                    {!n.read_at && (
+                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand" aria-label="Unread" />
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </>

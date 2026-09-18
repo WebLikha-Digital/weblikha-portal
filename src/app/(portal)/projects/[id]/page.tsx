@@ -2,7 +2,7 @@
  * PROJECT DETAIL PAGE
  * Shows a single project's header + tabbed content (to-dos, messages, team).
  * To-dos include per-task comment threads (task_comments).
- * Tab switching is handled client-side in ProjectTabsLayout — no URL params needed.
+ * Tab switching is handled client-side in ProjectTabsLayout, driven by ?tab= (and ?message= for the message board).
  */
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
@@ -13,8 +13,8 @@ import { ProjectTabsLayout } from '@/components/modules/projects/ProjectTabsLayo
 import { formatDate, formatPeso } from '@/lib/utils'
 import { ChevronRight, CalendarDays, Wallet } from 'lucide-react'
 import type {
-  ProjectDetail, ProjectSummary, TaskListWithTasks, MessageWithAuthor, User, ProjectTemplate,
-  UserRole,
+  ProjectDetail, ProjectSummary, TaskListWithTasks, MessageWithAuthor, MessageCategory,
+  User, ProjectTemplate, UserRole,
 } from '@/types'
 
 interface Props {
@@ -148,12 +148,26 @@ export default async function ProjectDetailPage({ params }: Props) {
   // rather than failing the entire page over it.
   const { data: messagesRaw, error: messagesError } = await supabase
     .from('messages')
-    .select('*, author: users(*)')
+    // Explicit columns: users(*) shipped every author's email and
+    // employment_type into clients' RSC payload.
+    .select('*, author: users(id, name, avatar_url, role), category: message_categories(id, name, emoji, archived_at)')
     .eq('project_id', id)
     .order('created_at', { ascending: false })
   if (messagesError) {
     console.error('[projects/[id]] messages fetch failed — message board will render empty:', messagesError)
   }
+
+  // Agency-wide message categories, archived included (posts still show them).
+  // Non-essential: degrade to an empty picker rather than failing the page.
+  const { data: categoriesRaw, error: categoriesError } = await supabase
+    .from('message_categories')
+    .select('*')
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true })
+  if (categoriesError) {
+    console.error('[projects/[id]] message categories fetch failed — picker will be empty:', categoriesError)
+  }
+  const categories = (categoriesRaw ?? []) as MessageCategory[]
 
   // Templates (for TodosTab apply-template picker) — non-essential, degrade
   // to an empty picker rather than failing the page.
@@ -214,6 +228,7 @@ export default async function ProjectDetailPage({ params }: Props) {
         currentUserId={authUser!.id}
         taskLists={taskLists}
         messages={messages}
+        categories={categories}
         members={members}
         admins={(adminUsers ?? []) as User[]}
         availableMembers={availableMembers}

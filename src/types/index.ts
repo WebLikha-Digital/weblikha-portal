@@ -123,10 +123,23 @@ export interface Message {
   project_id:        string
   author_id:         string | null
   title:             string
-  body:              string
+  body:              string          // Rich-text HTML; pre-021 rows may be plain text
   is_client_visible: boolean
+  category_id:       string | null
+  mentions:          string[]
   created_at:        string
   updated_at:        string
+}
+
+/** Agency-wide message board category (migration 021). Archived, never deleted. */
+export interface MessageCategory {
+  id:          string
+  name:        string
+  emoji:       string
+  position:    number
+  archived_at: string | null
+  created_at:  string
+  updated_at:  string
 }
 
 export interface PerformancePeriod {
@@ -204,9 +217,11 @@ export interface TaskListWithTasks extends TaskList {
   creator: Pick<User, 'id' | 'name' | 'role'> | null
 }
 
-/** Message with its author user data */
+/** Message with its author — only the fields the board renders. The full users
+ *  row carries email and employment_type, which must not reach clients. */
 export interface MessageWithAuthor extends Message {
-  author: User | null
+  author:   Pick<User, 'id' | 'name' | 'avatar_url' | 'role'> | null
+  category: Pick<MessageCategory, 'id' | 'name' | 'emoji' | 'archived_at'> | null
 }
 
 /** Performance period joined with the team member's user row */
@@ -318,6 +333,7 @@ export type NotificationType =
   | 'task_assigned'
   | 'client_task'
   | 'client_message'
+  | 'message_mention'
 
 /** notifications table row (named to avoid clashing with the DOM Notification type) */
 export interface AppNotification {
@@ -328,14 +344,18 @@ export interface AppNotification {
   project_id: string
   task_id:    string | null
   comment_id: string | null
+  message_id: string | null   // Set for client_message notifications (migration 020)
   read_at:    string | null
   created_at: string
 }
 
 /** Notification with the joined actor + task the bell dropdown renders */
 export interface NotificationWithMeta extends AppNotification {
-  actor: Pick<User, 'id' | 'name' | 'avatar_url'> | null
-  task:  { id: string; title: string } | null
+  actor:   Pick<User, 'id' | 'name' | 'avatar_url'> | null
+  task:    { id: string; title: string } | null
+  message: { id: string; title: string } | null
+  /** id and name only — never select budget into a notification. */
+  project: { id: string; name: string } | null
 }
 
 // ── Push subscriptions ─────────────────────────────────────────────────────────

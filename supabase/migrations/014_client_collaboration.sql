@@ -352,6 +352,8 @@ create policy "messages: client deletes own"
   using (
     public.get_user_role() = 'client'
     and author_id = auth.uid()
+    -- Back-ported from 020. Kept here so a re-run of 014 does not revert it.
+    and public.is_project_member(project_id)
   );
 
 

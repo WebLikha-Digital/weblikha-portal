@@ -1,16 +1,18 @@
 # Project Memory — Weblikha Portal
 
 Consolidated session memory. Imported into Claude Code via `@MEMORY.md` in CLAUDE.md.
-Last synced 2026-09-17.
+Last synced 2026-09-18.
 
 ---
 
 ## Current focus: the client portal
 
 Mid-build. Stages 1 and 2 are **done, deployed to prod, and the invite flow is tested end
-to end on both dev and prod**. **Stage 3 (the message board) is the next thing to build**,
-and Stage 4's client dashboard is still missing — see the table below for exactly what of
-Stage 4 already landed, and "Not done yet" at the bottom of this file for the full backlog.
+to end on both dev and prod**. **Stage 3 (the message board) is built on
+`feature/message-board`; migrations 020 + 021 are applied on dev and prod, so the branch
+is ready to merge** — see below. Stage 4's client
+dashboard is still missing — see the table below for exactly what of Stage 4 already
+landed, and "Not done yet" at the bottom of this file for the full backlog.
 
 ### Stage status
 
@@ -19,7 +21,7 @@ Stage 4 already landed, and "Not done yet" at the bottom of this file for the fu
 | — | Migration 014 (client collab) + types | ✅ Applied to **dev and prod**, and recorded in both history tables since the 2026-09-17 cleanup |
 | 1 | Invite + set-password auth | ✅ Done and **tested end to end on dev AND prod** — invite → email → `/auth/confirm` → set password → dashboard |
 | 2 | `/clients` admin page + nav | ✅ Done, merged (PR #3), deployed to prod |
-| 3 | Message board | ⬜ **NEXT** — still a read-only shell, see below |
+| 3 | Message board | ✅ Built on `feature/message-board`: compose/edit/delete, default-internal visibility switch, client posts notify the team, URL deep links |
 | 4 | Client dashboard + project view | 🟡 Partial: client nav set, `/rewards` guard, to-do capability gates, Team tab names-and-roles-only, "empty to-do list" query fix. **The client dashboard itself is not built.** |
 | — | Verification pass | 🟡 015–018 applied to dev **and** prod. PRs #3 and #4 merged; prod deployed at `27ab19d`. The four client-portal findings were fixed in code but **not individually re-tested** against the applied migrations. |
 
@@ -36,14 +38,20 @@ setup status (`approved` + `auth.users.last_sign_in_at`, read through the servic
 `docs/superpowers/`. Clients is deliberately **not** in `MobileTabBar` — it already carries
 five tabs; `MobileNav` renders the sidebar in its drawer.
 
-### Stage 3 — the message board does not exist yet
+### Stage 3 — message board
 
-Worth knowing before planning: `MessagesTab.tsx` is a **read-only shell**. The "New message"
-buttons have no handlers and there is no `createMessage` Server Action anywhere. "Clients can
-post on the message board" means building the board for everyone, from scratch:
-`createMessage` / `updateMessage` / `deleteMessage`, a compose modal, and wiring the dead
-buttons. Agreed: **visibility is a forced choice on every post** — no default, compose won't
-submit until internal or shared is picked. Client posts are locked to shared.
+Built. Spec and plan: `docs/superpowers/{specs,plans}/2026-09-17-message-board*`. Posts
+only — replies are a later stage. Team members get a "Visible to client" switch, **off by
+default**; the submit button reads "Post internally" / "Post to client". Clients have no
+switch. Visibility is locked after posting for every role (migration 020 trigger). Client
+posts notify approved admins and approved project providers (bell + push). The project
+page's tab now follows `?tab=`, and `?message=<id>` opens a post.
+
+Extended 2026-09-17 (spec `docs/superpowers/specs/2026-09-17-message-board-richtext-categories-design.md`):
+rich-text bodies via a shared `RichTextEditor`/`RichTextBody` also used by task comments;
+@mentions of project members and admins with bell, push and email; agency-wide
+admin-editable categories that archive rather than delete. Clients are never mentionable or
+notified on internal posts. Migration 021.
 
 ### Stage 4 — client experience (dashboard still to build)
 
@@ -60,7 +68,8 @@ with "Added by client" badges; template apply hidden; Team tab shows **names and
 - Client-filed tasks are worth **0 points** until an admin triages them
 - Clients **can** create phases, **cannot** apply phase templates
 - Client-created phases and tasks get an "Added by client" indicator via `created_by`
-- Message visibility is a forced choice per post
+- Message visibility: team toggle **off by default** (replaced "forced choice, no default"
+  on 2026-09-17 at Matthew's request); locked after posting; clients always shared
 - Clients see the whole to-do list, including internal tasks
 
 Full rationale and the security decisions are in CLAUDE.md → "Client portal".
@@ -85,6 +94,10 @@ items specifically:
   resolves to the per-deployment hostname, which then depends on the
   `https://weblikha-portal-*-<scope>.vercel.app/**` redirect wildcard being present.
 - Run `npm run check` locally — lint cannot run from the Cowork VM (see Environment notes)
+- ~~Apply 020 + 021 to dev and prod~~ — done 2026-09-18, both databases, before merging.
+  The order mattered: merging first would have shipped a bell query embedding `messages`
+  through `notifications.message_id`, which errors on a database without 020/021 and empties
+  every user's notification dropdown.
 
 ---
 
@@ -95,7 +108,7 @@ Live on Vercel with separate production Supabase project `vhsuyouczctnkvnnjzgg` 
 vars; service role scoped to Production. A `supabase-keepalive-ping` scheduled task pings
 both projects every 3 days.
 
-**Migration state:** 001–019 applied on **both** dev and prod.
+**Migration state:** 001–021 applied on **both** dev and prod (020 + 021 applied 2026-09-18, before the message-board branch merged).
 
 **Migration cleanup (2026-09-17).** Two files had both been numbered 014 — web push and
 client collaboration, written on branches that never saw each other. Web push moved to
@@ -237,7 +250,7 @@ When admin approves a team member in Settings, email them. Plan: call Resend API
 In-app bell (migration 013) + web push (migration 014) both live. Remaining notification follow-ups: membership check in the migration-013 trigger, `pushsubscriptionchange` handler, disable-push UI, client tagging later.
 
 ### AI features (parked until non-AI roadmap ships)
-Parked until Revenue, Rewards, Resend email, notifications, message compose, and service worker ship. (As of 2026-07-14 only message compose remains.) Agreed favorite: **AI project scaffolding** — describe a project in a sentence at creation, Claude generates phases/tasks with due dates + point values, admin reviews before applying (reuses `applyTemplate` machinery). Runners-up: weekly per-project digest to message board; comment-thread summarizer. Needs `ANTHROPIC_API_KEY` server-side; Sonnet for scaffolding, Haiku for digests.
+Parked until Revenue, Rewards, Resend email, notifications, message compose, and service worker ship. (Message compose was built 2026-09-17 on feature/message-board; once merged, the non-AI list is complete.) Agreed favorite: **AI project scaffolding** — describe a project in a sentence at creation, Claude generates phases/tasks with due dates + point values, admin reviews before applying (reuses `applyTemplate` machinery). Runners-up: weekly per-project digest to message board; comment-thread summarizer. Needs `ANTHROPIC_API_KEY` server-side; Sonnet for scaffolding, Haiku for digests.
 
 ---
 
@@ -304,13 +317,8 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
 
 ### The client portal's remaining work
 
-1. **Stage 3 — the message board.** `MessagesTab.tsx` is still a **read-only shell**: the
-   "New message" buttons have no handlers and no `createMessage` Server Action exists
-   anywhere. Needs `createMessage` / `updateMessage` / `deleteMessage`, a compose modal, and
-   the dead buttons wired. Agreed behaviour: **visibility is a forced choice on every post**
-   — no default, compose will not submit until internal or shared is picked; client posts are
-   locked to shared. Do this before Stage 4 — the client dashboard wants a "recent shared
-   messages" card.
+1. ~~**Stage 3 — the message board.**~~ Built 2026-09-17 — see the Stage 3 section above.
+   Follow-up stage: replies on messages.
 2. **Stage 4 — the client dashboard itself.** Not built. Should carry: project cards with
    status + progress, the client's own open requests, recent shared messages, and upcoming +
    overdue deadlines. A client currently lands on `/dashboard` and gets the **provider**
@@ -333,10 +341,8 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
 
 ### Known security / correctness gaps, deliberately left
 
-8. **`messages: client deletes own`** lacks the `is_project_member(project_id)` clause its
-   `tasks` and `task_lists` siblings got in 018. Revoking a client deletes their
-   `project_members` rows rather than flipping a flag, so a revoked client with a live
-   session can still delete messages they authored.
+8. ~~**`messages: client deletes own`** lacked `is_project_member`~~ — fixed in migration 020
+   and back-ported into 014.
 9. **Migration-013's in-app notification trigger has no membership check** — a user can be
    @mentioned on a task in a project they do not belong to. Post-017 the task embed returns
    null and the bell degrades gracefully, but the notification row is still created. (Carried
@@ -372,10 +378,28 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
     the trigger, so it is a read-only page (point history, monthly total, progress toward the
     1,000-pt threshold) plus an admin bonus/deduction control.
 
+### Raised by the 021 review pass (2026-09-18), deliberately deferred
+
+18. **`comment-attachments` storage policies are bucket-wide** (`009`): any authenticated
+    user may INSERT at any path and the whole bucket is publicly readable, with no cleanup
+    when a comment or message is deleted. Unchanged since 009, but the blast radius grew
+    when message images started using the same bucket (`messages/${projectId}/…`). A fix
+    scopes the insert policy to paths the caller is authorised for, or moves to signed URLs.
+19. **The toolbar's link button uses native `prompt()`** (`RichTextEditor.tsx`), carried over
+    from the pre-split comment editor — the same class of thing `confirmDialog` replaced.
+    Wants a small inline link form.
+20. **Mention dedup depends on trigger-name order.** `messages_notify_client_message` sorts
+    before `messages_notify_mentions`, which is what stops a client's post double-notifying a
+    mentioned teammate. Renaming either trigger silently reintroduces duplicates; documented
+    in 021's comments, with no test to catch it.
+21. **`notifications_type_check` is now `NOT VALID`** (021) so applying it takes no full-table
+    lock. Existing rows already satisfy the widened list; run `validate constraint` off-peak
+    if you want it marked valid.
+
 ### Repo hygiene
 
-18. **`tsconfig.tsbuildinfo` is tracked** — a build artifact that dirties the tree on every
+22. **`tsconfig.tsbuildinfo` is tracked** — a build artifact that dirties the tree on every
     build. Wants a `.gitignore` entry plus `git rm --cached`.
-19. **No test framework at all.** Every change this session was gated on `npx tsc --noEmit`,
+23. **No test framework at all.** Every change this session was gated on `npx tsc --noEmit`,
     review, and manual checks. Adding one is a real decision that has never been made — not
     something to bolt on mid-feature.

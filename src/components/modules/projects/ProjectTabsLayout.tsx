@@ -2,25 +2,30 @@
 /**
  * PROJECT TABS LAYOUT
  * ─────────────────────────────────────────────────────────────────────────────
- * Manages tab state client-side with useState so switching between
- * To-dos / Message board / Team is instant — no server round-trip.
+ * The active tab is DERIVED from ?tab= on every render rather than held in
+ * state. That is what lets a notification link (?tab=messages&message=…) switch
+ * tabs even when the project page is already open. Tab clicks update the URL
+ * with history.replaceState, so switching stays instant and refresh keeps the tab.
  *
- * All tab data is fetched once by the parent Server Component and passed
- * as props (including currentUserId for per-task edit permissions).
- * Tabs switch by toggling visibility, not by navigating.
+ * All tab data is fetched once by the parent Server Component and passed down.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { replaceSearchParams } from '@/lib/url-state'
 import { TodosTab } from '@/components/modules/projects/TodosTab'
 import { MessagesTab } from '@/components/modules/projects/MessagesTab'
 import { TeamTab } from '@/components/modules/projects/TeamTab'
 import type {
-  TaskListWithTasks, MessageWithAuthor,
+  TaskListWithTasks, MessageWithAuthor, MessageCategory,
   User, ProjectTemplate, ProjectDetail, UserRole,
 } from '@/types'
 
 type Tab = 'todos' | 'messages' | 'team'
+
+function isTab(value: string | null): value is Tab {
+  return value === 'todos' || value === 'messages' || value === 'team'
+}
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'todos',    label: 'To-dos' },
@@ -33,6 +38,7 @@ interface ProjectTabsLayoutProps {
   currentUserId:    string
   taskLists:        TaskListWithTasks[]
   messages:         MessageWithAuthor[]
+  categories:       MessageCategory[]
   members:          ProjectDetail['members']
   admins:           User[]
   availableMembers: User[]
@@ -47,6 +53,7 @@ export function ProjectTabsLayout({
   currentUserId,
   taskLists,
   messages,
+  categories,
   members,
   admins,
   availableMembers,
@@ -54,7 +61,9 @@ export function ProjectTabsLayout({
   isAdmin,
   viewerRole,
 }: ProjectTabsLayoutProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('todos')
+  const searchParams = useSearchParams()
+  const tabParam     = searchParams.get('tab')
+  const activeTab: Tab = isTab(tabParam) ? tabParam : 'todos'
 
   return (
     <>
@@ -63,9 +72,12 @@ export function ProjectTabsLayout({
         {TABS.map(tab => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            // Switching tabs closes any open message.
+            onClick={() => replaceSearchParams({ tab: tab.key, message: null })}
+            aria-current={activeTab === tab.key ? 'page' : undefined}
             className={cn(
-              'shrink-0 whitespace-nowrap px-4 py-2.5 text-sm transition-colors border-b-2 -mb-px',
+              'shrink-0 whitespace-nowrap px-4 py-2.5 text-sm transition-colors duration-150 border-b-2 -mb-px',
+              'active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
               activeTab === tab.key
                 ? 'text-brand border-brand font-medium'
                 : 'text-secondary border-transparent hover:text-primary',
@@ -89,7 +101,15 @@ export function ProjectTabsLayout({
         />
       )}
       {activeTab === 'messages' && (
-        <MessagesTab messages={messages} />
+        <MessagesTab
+          messages={messages}
+          categories={categories}
+          members={members}
+          admins={admins}
+          projectId={projectId}
+          currentUserId={currentUserId}
+          viewerRole={viewerRole}
+        />
       )}
       {activeTab === 'team' && (
         <TeamTab

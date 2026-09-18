@@ -238,7 +238,7 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
           <form action="/auth/signout" method="post">
             <button
               type="submit"
-              className="text-tertiary hover:text-danger transition-colors duration-fast"
+              className="rounded-md text-tertiary transition-colors duration-fast hover:text-danger active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               title="Sign out"
               aria-label="Sign out"
             >

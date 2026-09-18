@@ -74,8 +74,13 @@ export function profileDraftError(draft: ProfileDraft, isClient: boolean): strin
   if (!draft.name.trim()) return 'Your name cannot be empty.'
   if (draft.name.trim().length > 100) return 'Your name is at most 100 characters.'
 
-  const phone = phoneError(draft.phone)
-  if (phone) return phone
+  // Unlike onboarding, the profile page must allow clearing a phone back to
+  // empty — the column is nullable and updateProfile already blanks it to
+  // null. Only validate the format when something was actually entered.
+  if (draft.phone.trim() !== '') {
+    const phone = phoneError(draft.phone)
+    if (phone) return phone
+  }
 
   const timezone = timezoneError(draft.timezone)
   if (timezone) return timezone

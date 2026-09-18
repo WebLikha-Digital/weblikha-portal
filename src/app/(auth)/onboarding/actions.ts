@@ -49,7 +49,18 @@ export async function completeOnboarding(input: {
     .eq('id', user.id)
     .select('id')
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    // guard_user_timezone() (migration 024) raises errcode 22023 with
+    // "Unknown timezone: <value>" when Intl.supportedValuesOf offers a zone
+    // Postgres's tzdata does not recognize. Production Next.js redacts the
+    // real message, so this is the only chance to hand the person something
+    // actionable instead of an opaque failure with no way out.
+    const isTimezoneRejection = error.code === '22023' || /unknown timezone/i.test(error.message)
+    if (isTimezoneRejection) {
+      throw new Error('We could not save that timezone — pick the nearest city instead.')
+    }
+    throw new Error(error.message)
+  }
   if (!data || data.length === 0) throw new Error('Could not save your details. Try again.')
 
   // phone lives in user_private (migration 024), not on users — see the

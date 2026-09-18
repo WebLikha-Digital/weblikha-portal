@@ -55,13 +55,16 @@ export default async function ProjectDetailPage({ params }: Props) {
   // `users(*)` would leak `employment_type`, `email`, `skills` and
   // `approved` for every project member into the client's RSC payload;
   // admin and provider viewers keep the full row (providers seeing
-  // `employment_type` is intended). The select string is kept literal per
-  // branch (not built at runtime) because supabase-js parses the select
-  // string at the type level.
+  // `employment_type` is intended). `job_title` and `timezone` are included
+  // here (unlike employment_type) — they're already shown to admins and
+  // neither lives in the sensitive `user_private` table, so PersonMeta on
+  // the Team tab can render for the client viewer it was built for. The
+  // select string is kept literal per branch (not built at runtime) because
+  // supabase-js parses the select string at the type level.
   const { data: projectRaw, error: projectError } = isClient
     ? await supabase
         .from('projects')
-        .select('id, name, client_name, status, start_date, end_date, description, created_at, members: project_members(*, user: users(id, name, avatar_url, specialty, role))')
+        .select('id, name, client_name, status, start_date, end_date, description, created_at, members: project_members(*, user: users(id, name, avatar_url, specialty, role, job_title, timezone))')
         .eq('id', id)
         .single()
     : await supabase

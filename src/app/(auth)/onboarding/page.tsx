@@ -55,6 +55,20 @@ export default async function OnboardingPage() {
             avatarUrl={profile.avatar_url}
           />
         </div>
+
+        {/* Escape hatch: if completeOnboarding ever fails (a transient write,
+            or a timezone Postgres's tzdata rejects), this screen must not be
+            a dead end — copied from (auth)/pending/page.tsx. */}
+        <div className="mt-4 text-center">
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              className="text-sm text-secondary hover:text-primary transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   )

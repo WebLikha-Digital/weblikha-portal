@@ -32,8 +32,7 @@ export interface User {
   avatar_url:      string | null
   approved:        boolean
   // Profile (migration 024). All optional — a half-filled profile is normal.
-  phone:           string | null
-  birthdate:       string | null    // ISO date (YYYY-MM-DD)
+  // phone and birthdate are NOT here — see UserPrivate below.
   timezone:        string | null    // IANA zone, e.g. Asia/Manila
   job_title:       string | null
   location:        string | null
@@ -48,10 +47,25 @@ export interface User {
 /**
  * A person only ever rendered as "@name" — the mention lists and pickers.
  * Deliberately narrow: the project page ships this list to EVERY viewer,
- * clients included, so it must not carry phone, birthdate, bio or
- * employment_type (migration 024 added the first three).
+ * clients included, so it must not carry bio or employment_type (migration
+ * 024). phone and birthdate were never a risk here — they live in
+ * UserPrivate, not on User, and were never selectable through this type.
  */
 export type MentionableUser = Pick<User, 'id' | 'name' | 'avatar_url' | 'role'>
+
+/**
+ * The sensitive half of a profile (migration 024), split out of `users`
+ * because 013's "approved members read directory" policy makes every column
+ * of `users` readable by any approved member — a phone number and a date of
+ * birth cannot live there. RLS on `user_private` restricts rows to their
+ * owner and admins. See CLAUDE.md → "RLS summary".
+ */
+export interface UserPrivate {
+  user_id:    string
+  phone:      string | null
+  birthdate:  string | null    // ISO date (YYYY-MM-DD)
+  updated_at: string
+}
 
 export interface Project {
   id:          string
@@ -84,9 +98,12 @@ export type ClientSetupStatus = 'active' | 'invite_pending' | 'revoked'
 export type PickerProject = Pick<Project, 'id' | 'name' | 'status'>
 
 /** One row of the /clients table, assembled server-side so the client
- *  component never has to join memberships to projects itself. */
+ *  component never has to join memberships to projects itself. `phone`
+ *  is read separately from `user_private` (migration 024) — `user` never
+ *  carries it. */
 export interface ClientRow {
   user:     User
+  phone:    string | null
   projects: PickerProject[]
   status:   ClientSetupStatus
 }

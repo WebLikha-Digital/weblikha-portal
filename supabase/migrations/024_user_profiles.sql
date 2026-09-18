@@ -9,13 +9,20 @@
 --
 --   1. Profile columns on public.users. All nullable: a half-filled profile is
 --      a normal state, not an error.
---   2. A timezone trigger, because a CHECK cannot consult pg_timezone_names.
---   3. An `avatars` storage bucket whose writes are scoped to each user's own
---      folder — deliberately NOT how comment-attachments (009) was set up.
+--   2. public.user_private — phone and birthdate live here, NOT on users. See
+--      the section below for why: 013's directory policy makes every column
+--      of `users` readable by any approved member, and those two are not
+--      agency-wide information the way a job title or a timezone is.
+--   3. A timezone trigger, because a CHECK cannot consult pg_timezone_names.
+--   4. An `avatars` storage bucket whose writes are scoped to each user's own
+--      folder — deliberately NOT how comment-attachments (009) was set up —
+--      with a size and MIME allowlist enforced at the bucket level, not just
+--      in the upload component.
 --
--- NO new RLS policies: "users: update own profile" already exists, and 016's
--- guard_user_privileged_columns() blocks role/approved/email. Everything added
--- here is meant to be self-editable. Do not touch that guard.
+-- NO new RLS policies on users: "users: update own profile" already exists,
+-- and 016's guard_user_privileged_columns() blocks role/approved/email.
+-- Everything added to users here is meant to be self-editable. Do not touch
+-- that guard.
 --
 -- Apply with: npx supabase db push --db-url $env:DB_URL   (dev first, then prod)
 -- Safe to re-run.
@@ -27,8 +34,6 @@
 -- Limits mirror src/lib/profile.ts — change them together.
 -- =============================================================================
 
-alter table public.users add column if not exists phone           text;
-alter table public.users add column if not exists birthdate       date;
 alter table public.users add column if not exists timezone        text;
 alter table public.users add column if not exists job_title       text;
 alter table public.users add column if not exists location        text;
@@ -43,10 +48,6 @@ comment on column public.users.company is
   'Client-side only: the company a client works for. Distinct from projects.client_name, which names the engagement.';
 comment on column public.users.onboarded_at is
   'Set once by completeOnboarding(). Null sends the user to /onboarding via (portal)/layout.tsx. Deliberately not derived from "are the fields filled", so clearing a field does not re-trigger onboarding.';
-
-alter table public.users drop constraint if exists users_phone_length;
-alter table public.users add constraint users_phone_length
-  check (phone is null or char_length(btrim(phone)) between 5 and 30);
 
 alter table public.users drop constraint if exists users_timezone_length;
 alter table public.users add constraint users_timezone_length
@@ -75,14 +76,87 @@ alter table public.users add constraint users_company_website_format
     or (char_length(company_website) <= 200 and company_website ~* '^https?://')
   );
 
--- A birthday in the future is a typo, not a fact.
+-- Columns that predate this migration on a database where it was already
+-- (mis-)applied once: phone and birthdate never belonged on users (see § 2
+-- below) — drop them here so a re-run of this file also repairs that.
+alter table public.users drop constraint if exists users_phone_length;
 alter table public.users drop constraint if exists users_birthdate_past;
-alter table public.users add constraint users_birthdate_past
-  check (birthdate is null or birthdate < current_date);
+alter table public.users drop column if exists phone;
+alter table public.users drop column if exists birthdate;
 
 
 -- =============================================================================
--- 2. TIMEZONE VALIDATION
+-- 2. SENSITIVE PROFILE DATA — public.user_private
+--
+-- Why this is not on `users`: migration 013 added "users: approved members
+-- read directory" — select on ALL COLUMNS of ALL ROWS, for any approved user.
+-- That policy is load-bearing (mention lists, member/assignee pickers) and is
+-- not row-level narrowable, so any column added to `users` is readable
+-- agency-wide, teammate and client alike, the moment it exists. A phone
+-- number and a full date of birth are not that kind of information — unlike
+-- timezone, job_title, location, bio, company and company_website, which are
+-- shown to colleagues by design (PersonMeta, the client list) and carry no
+-- comparable exposure. Column-level REVOKE cannot fix this either: it applies
+-- to the `authenticated` role as a whole, so it would also block an admin
+-- reading a client's phone number and a person reading their own.
+--
+-- Splitting the two sensitive columns into their own table, gated by their
+-- own RLS, is the only fix that keeps `users` readable for mentions/pickers
+-- while keeping phone and birthdate readable only by their owner and admins.
+-- =============================================================================
+
+create table if not exists public.user_private (
+  user_id    uuid        primary key references public.users(id) on delete cascade,
+  phone      text,
+  birthdate  date,
+  updated_at timestamptz not null default now()
+);
+
+comment on table public.user_private is
+  'Phone and birthdate, split out of users because 013''s "approved members read directory" policy makes every users column readable by any approved member — see the header of this migration.';
+comment on column public.user_private.phone is
+  'Mirrors the old users.phone: 5-30 chars after btrim, when present. Owner + admin read/write only.';
+comment on column public.user_private.birthdate is
+  'Mirrors the old users.birthdate: must be in the past, when present. Owner + admin read/write only.';
+
+alter table public.user_private drop constraint if exists user_private_phone_length;
+alter table public.user_private add constraint user_private_phone_length
+  check (phone is null or char_length(btrim(phone)) between 5 and 30);
+
+-- A birthday in the future is a typo, not a fact.
+alter table public.user_private drop constraint if exists user_private_birthdate_past;
+alter table public.user_private add constraint user_private_birthdate_past
+  check (birthdate is null or birthdate < current_date);
+
+drop trigger if exists user_private_set_updated_at on public.user_private;
+create trigger user_private_set_updated_at
+  before update on public.user_private
+  for each row execute function public.set_updated_at();
+
+alter table public.user_private enable row level security;
+
+-- Owner or admin, full stop — no directory-style read for anyone else.
+drop policy if exists "user_private: owner or admin select" on public.user_private;
+create policy "user_private: owner or admin select"
+  on public.user_private for select
+  using (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists "user_private: owner or admin insert" on public.user_private;
+create policy "user_private: owner or admin insert"
+  on public.user_private for insert
+  with check (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists "user_private: owner or admin update" on public.user_private;
+create policy "user_private: owner or admin update"
+  on public.user_private for update
+  using (user_id = auth.uid() or public.is_admin())
+  with check (user_id = auth.uid() or public.is_admin());
+
+-- No delete policy: the row goes with the user via ON DELETE CASCADE.
+
+
+-- =============================================================================
+-- 3. TIMEZONE VALIDATION
 --
 -- A CHECK constraint cannot subquery pg_timezone_names, so the real validation
 -- is a trigger. The browser picker only offers genuine IANA zones; this is what
@@ -125,7 +199,7 @@ create trigger users_guard_timezone
 
 
 -- =============================================================================
--- 3. AVATAR STORAGE
+-- 4. AVATAR STORAGE
 --
 -- Public to read (avatars appear all over the portal, including in emails'
 -- absence), but each user may only write inside a folder named after their own
@@ -133,12 +207,20 @@ create trigger users_guard_timezone
 --
 -- comment-attachments (009) lets ANY authenticated user write ANY path and is
 -- world-readable — repeating that here would let anyone overwrite anyone's
--- face. Size and MIME limits are enforced in the upload component.
+-- face. The browser-side checks in AvatarUploader are a convenience only;
+-- file_size_limit and allowed_mime_types below are what actually survive a
+-- direct API call.
 -- =============================================================================
 
-insert into storage.buckets (id, name, public)
-values ('avatars', 'avatars', true)
-on conflict (id) do nothing;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'avatars', 'avatars', true,
+  2097152, -- 2 MB, in bytes
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update set
+  file_size_limit     = excluded.file_size_limit,
+  allowed_mime_types   = excluded.allowed_mime_types;
 
 drop policy if exists "avatars: public read" on storage.objects;
 create policy "avatars: public read"
@@ -180,6 +262,16 @@ create policy "avatars: owner deletes"
 -- Manual checks after applying:
 --   - update users set timezone = 'Mars/Olympus' where id = auth.uid() → rejected.
 --   - update users set timezone = 'Asia/Manila' → accepted.
+--   - As a signed-in client, `select phone from user_private where user_id =
+--     '<some other user>'` → 0 rows; the same query with your own id → your row
+--     (or 0 rows if you have never saved one).
+--   - As an admin, the same query against another user's id → their row.
+--   - As a signed-in client, `select * from users where id = '<some other
+--     user>'` still returns their row (013's directory policy) but it has no
+--     phone/birthdate columns to leak.
 --   - Upload to avatars/{someone-else-id}/x.png → rejected by RLS.
---   - update users set role = 'admin' as a client → still rejected by 016's guard.
+--   - Upload a 3 MB file, or a .gif, to your own avatars/{your-id}/ folder →
+--     rejected by the bucket's file_size_limit / allowed_mime_types.
+--   - update users set role = 'admin' as a client → still rejected by 016's
+--     guard.
 -- =============================================================================

@@ -79,14 +79,15 @@ src/
 │   │   │                        Escape is handled in the capture phase so it dismisses the
 │   │   │                        confirm dialog without also closing a modal open beneath it.
 │   │   └── toast.tsx            toast() + host — NOT in barrel, import directly
-│   ├── layout/             PortalShell, sidebar, MobileNav, MobileTabBar, NotificationsBell
+│   ├── layout/             PortalShell, sidebar, MobileNav, MobileTabBar, NotificationsBell,
+│   │                       EditWindowProvider
 │   └── modules/            Feature-specific components
 │       ├── editor/         RichTextEditor (shared TipTap field), RichTextBody (sanitised renderer)
 │       ├── projects/       ProjectCard, ProjectTabs(+Layout), TodosTab, TodoItem,
 │       │                   MessagesTab, TeamTab, CommentEditor, CommentBody, NewProjectModal
 │       ├── team/           TeamTabs, TeamPerformanceTable, MembersTab
 │       ├── auth/           LoginForm (password + Google + magic-link fallback)
-│       └── settings/       ApprovalQueue, TemplateBuilder
+│       └── settings/       ApprovalQueue, TemplateBuilder, EditWindowCard
 │
 ├── lib/
 │   ├── supabase/
@@ -151,7 +152,7 @@ Tailwind is configured to map those tokens to utility classes. Enforced by the
 ## Database schema
 
 Postgres on Supabase. All tables have Row Level Security enabled. Schema is built up
-across `supabase/migrations/001` → `022` (see the migration log below). The
+across `supabase/migrations/001` → `023` (see the migration log below). The
 authoritative TypeScript mirror is `src/types/index.ts` — update it whenever a column
 changes.
 
@@ -191,6 +192,8 @@ client_projects     VIEW over projects WITHOUT budget/created_by/updated_at.
                     security_invoker, so caller RLS still applies. Client-facing
                     screens read this — RLS is row-level, so querying `projects`
                     directly hands a client the budget column.
+app_settings        id (always 1), edit_window_minutes, updated_at (agency-wide;
+                    admin-editable)
 ```
 
 ### Template tables (project scaffolding from Settings)
@@ -241,6 +244,7 @@ template_tasks          id, template_task_list_id, title, description, points_va
 021 message categories + mentions (message_categories, messages.category_id/mentions,
     message_mention)
 022 message replies (message_replies, can_read_message, reply notifications)
+023 editing window (app_settings, within_edit_window, author-only updates)
 ```
 
 **Why 019 is out of chronological order.** Web push shipped first but was numbered 014 on a
@@ -298,6 +302,11 @@ Threshold for loyalty incentive: **1,000 pts/month**. Admin views/overrides `adm
   A reply notifies the post's author and earlier repliers, and never notifies a client
   on an internal post. Both reply triggers fire on INSERT only — editing a reply notifies
   nobody, including for a newly added mention.
+- **Editing:** only the author may edit a message, reply or task comment, and only while
+  within_edit_window(created_at) holds (default 15 minutes, set agency-wide in Settings).
+  Migration 023 removed the FOR ALL admin policies on messages (004) and task_comments
+  (008) that let an admin rewrite other people's words; admins keep read and delete.
+  Deleting is not time-limited.
 - Revenue table: **admin only** — providers and clients never see financial data
 - **Budget caveat:** RLS is row-level. The `projects: member or admin` policy hands any
   member the whole row including `budget`, so client screens must read `client_projects`.

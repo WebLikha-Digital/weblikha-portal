@@ -59,6 +59,12 @@ migration 022): a flat thread per post, visibility inherited from the post, noti
 post's author and everyone already in the thread. Editing a reply notifies nobody, including
 for a newly added mention.
 
+Editing tightened 2026-09-18 (spec `docs/superpowers/specs/2026-09-18-edit-window-design.md`,
+migration 023): only the author may edit a post, reply or task comment, and only inside an
+agency-wide window (default 15 minutes, Settings → Content). Admins lost the FOR ALL write
+power that let them edit other people's content; they keep delete. Everything posted before
+023 is past the window, so it is no longer editable.
+
 ### Stage 4 — client experience (dashboard still to build)
 
 Third nav set (no Revenue / Rewards / Team). Client dashboard carries: project cards with
@@ -105,6 +111,7 @@ items specifically:
   through `notifications.message_id`, which errors on a database without 020/021 and empties
   every user's notification dropdown.
 - Apply 022 to dev, run the reply checklist, apply to prod, then merge.
+- Apply 023 to dev, run the checklist, apply to prod, then merge.
 
 ---
 

@@ -8,6 +8,7 @@ import { useOptimistic, useTransition, useState, useRef, useEffect } from 'react
 import { Plus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui'
+import { PersonMeta } from '@/components/modules/profile/PersonMeta'
 import { updateEmploymentType, updateUserSkills } from '@/app/(portal)/team/actions'
 import type { User, PerformancePeriod, EmploymentType } from '@/types'
 
@@ -257,6 +258,12 @@ function MemberSection({ title, members, statsMap, periodsMap, onToggleType, onS
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-primary truncate">{user.name}</p>
                     <p className="text-2xs text-tertiary truncate">{user.email}</p>
+                    <PersonMeta
+                      timezone={user.timezone}
+                      jobTitle={user.job_title}
+                      birthdate={user.birthdate}
+                      className="mt-0.5"
+                    />
                   </div>
                 </div>
 

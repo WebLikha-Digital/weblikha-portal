@@ -5,6 +5,7 @@ import { UserPlus, X, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { addProjectMember, removeProjectMember } from '@/app/(portal)/projects/actions'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { PersonMeta } from '@/components/modules/profile/PersonMeta'
 import type { ProjectMember, User, UserRole } from '@/types'
 
 interface TeamTabProps {
@@ -90,7 +91,10 @@ export function TeamTab({ projectId, members, availableMembers, isAdmin, viewerR
                 <Avatar name={m.user.name} src={m.user.avatar_url} size="sm" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-primary">{m.user.name}</p>
-                  <p className="text-2xs text-secondary capitalize">{m.user.specialty}</p>
+                  <p className="text-2xs text-secondary capitalize">
+                    {m.user.job_title?.trim() || m.user.specialty}
+                  </p>
+                  <PersonMeta timezone={m.user.timezone} />
                 </div>
                 <span className="text-2xs text-secondary bg-bg-surface-3 px-2 py-0.5 rounded-full">
                   {m.role_in_project || m.user.role}

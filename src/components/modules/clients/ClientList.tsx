@@ -13,6 +13,7 @@ import { Avatar, Badge, Button } from '@/components/ui'
 import type { BadgeProps } from '@/components/ui'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { toast, withToast } from '@/components/ui/toast'
+import { PersonMeta } from '@/components/modules/profile/PersonMeta'
 import {
   resendClientInvite,
   revokeClientAccess,
@@ -131,6 +132,11 @@ export function ClientList({ rows, allProjects }: ClientListProps) {
                 <Badge variant={meta.variant}>{meta.label}</Badge>
               </div>
               <p className="text-2xs text-secondary truncate">{user.email}</p>
+              <div className="flex flex-wrap items-center gap-x-2 text-2xs text-tertiary">
+                {user.company && <span className="truncate">{user.company}</span>}
+                {user.phone   && <span className="whitespace-nowrap">{user.phone}</span>}
+              </div>
+              <PersonMeta timezone={user.timezone} jobTitle={user.job_title} />
 
               <div className="flex items-center gap-1 flex-wrap mt-1.5">
                 {projects.length === 0

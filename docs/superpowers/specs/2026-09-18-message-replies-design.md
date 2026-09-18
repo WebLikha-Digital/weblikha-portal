@@ -154,7 +154,7 @@ Same discipline as `message-actions.ts`:
 
 Below the post body: a divider, `Replies (n)`, then the thread oldest-first. Each reply shows
 avatar, name, relative time, an "Edited" marker when `updated_at > created_at`, and the body
-through `RichTextBody` (size `sm`). Edit and Delete appear for the author, and Delete for an
+through `RichTextBody` (size `xs`, a step down from the post's `sm` body). Edit and Delete appear for the author, and Delete for an
 admin; editing swaps the body for the editor in place with Save and Cancel, as task comments
 do. Delete goes through `confirmDialog`.
 

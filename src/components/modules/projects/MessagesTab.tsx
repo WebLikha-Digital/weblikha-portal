@@ -196,6 +196,7 @@ export function MessagesTab({
 
       {openMessage && !editing && (
         <MessageDetailModal
+          key={openMessage.id}
           message={openMessage}
           projectId={projectId}
           viewerRole={viewerRole}

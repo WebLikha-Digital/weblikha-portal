@@ -296,7 +296,8 @@ Threshold for loyalty incentive: **1,000 pts/month**. Admin views/overrides `adm
   (notify_message_mentions). Replies (022) inherit their post's visibility through
   can_read_message(); a client can neither read nor write replies on an internal post.
   A reply notifies the post's author and earlier repliers, and never notifies a client
-  on an internal post.
+  on an internal post. Both reply triggers fire on INSERT only — editing a reply notifies
+  nobody, including for a newly added mention.
 - Revenue table: **admin only** — providers and clients never see financial data
 - **Budget caveat:** RLS is row-level. The `projects: member or admin` policy hands any
   member the whole row including `budget`, so client screens must read `client_projects`.

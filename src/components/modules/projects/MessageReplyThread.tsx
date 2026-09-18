@@ -59,7 +59,7 @@ export function MessageReplyThread({
   const [editingId, setEditing] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<RichTextValue>(EMPTY_VALUE)
   const [busyId, setBusyId]     = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [, startTransition]     = useTransition()
 
   const isAdmin = viewerRole === 'admin'
 
@@ -194,7 +194,7 @@ export function MessageReplyThread({
                         <button
                           type="button"
                           className={iconButton}
-                          disabled={isPending || editingId !== null}
+                          disabled={editingId !== null || busy}
                           onClick={() => {
                             setEditing(reply.id)
                             setEditDraft({
@@ -213,7 +213,7 @@ export function MessageReplyThread({
                         <button
                           type="button"
                           className={cn(iconButton, 'hover:text-danger hover:bg-danger/10')}
-                          disabled={isPending}
+                          disabled={busy}
                           onClick={() => { void remove(reply) }}
                           aria-label="Delete reply"
                         >
@@ -232,7 +232,7 @@ export function MessageReplyThread({
                       onChange={setEditDraft}
                       initialContent={reply.body}
                       placeholder="Edit your reply…"
-                      disabled={isPending}
+                      disabled={busy}
                       autoFocus
                       onSubmitShortcut={() => saveEdit(reply.id)}
                       onEscape={() => setEditing(null)}
@@ -241,7 +241,7 @@ export function MessageReplyThread({
                           <button
                             type="button"
                             onClick={() => setEditing(null)}
-                            disabled={isPending}
+                            disabled={busy}
                             className="h-7 px-2 text-xs text-secondary hover:text-primary active:opacity-70 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40"
                           >
                             Cancel
@@ -249,7 +249,7 @@ export function MessageReplyThread({
                           <button
                             type="button"
                             onClick={() => saveEdit(reply.id)}
-                            disabled={isPending || editDraft.isEmpty || editDraft.uploading}
+                            disabled={busy || editDraft.isEmpty || editDraft.uploading}
                             className="h-7 px-3 text-xs bg-brand text-bg-base font-medium rounded-md hover:bg-brand/90 active:scale-[0.98] disabled:opacity-40 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                           >
                             {busy ? 'Saving…' : 'Save'}
@@ -275,14 +275,20 @@ export function MessageReplyThread({
         uploadPrefix={`messages/${projectId}`}
         onChange={setDraft}
         placeholder="Write a reply…"
-        disabled={isPending}
+        disabled={busyId === 'new'}
         onSubmitShortcut={submitNew}
+        // F1: without this, RichTextEditor's Escape branch never runs (it only
+        // fires when onEscape is passed) and the key bubbles to
+        // MessageDetailModal's document listener, closing the modal and
+        // discarding the draft. Intentional no-op: Escape in the composer
+        // should do nothing visible, not clear the draft or close the modal.
+        onEscape={() => {}}
         footer={
           <div className="flex items-center justify-end gap-2 px-2 py-1.5 border-t border-subtle">
             <button
               type="button"
               onClick={submitNew}
-              disabled={isPending || draft.isEmpty || draft.uploading}
+              disabled={busyId === 'new' || draft.isEmpty || draft.uploading}
               className="flex items-center gap-1.5 h-7 px-3 text-xs bg-brand text-bg-base font-medium rounded-md hover:bg-brand/90 active:scale-[0.98] disabled:opacity-40 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               <Send className="size-3" />

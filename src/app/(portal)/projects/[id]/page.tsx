@@ -121,6 +121,13 @@ export default async function ProjectDetailPage({ params }: Props) {
   // one FK to `users` (`created_by`), so its embed is unambiguous without a
   // hint — but the hint is added anyway for symmetry with `tasks` and to
   // stay unambiguous if a second FK is ever added there too.
+  // Explicit columns on `assignee` and `comments.author`, NOT `users(*)`:
+  // this whole result is handed straight to TodosTab (a client component)
+  // with no role branch, so every viewer — clients included — gets whatever
+  // is selected here. TodoItem only ever renders assignee.name/avatar_url
+  // and comment.author.name/avatar_url (see MentionableUser), so `users(*)`
+  // was shipping email, skills, approved, employment_type and, since
+  // migration 024, phone/birthdate/bio to every viewer of the page.
   const { data: taskListsRaw, error: taskListsError } = await supabase
     .from('task_lists')
     .select(`
@@ -128,9 +135,9 @@ export default async function ProjectDetailPage({ params }: Props) {
       creator: users!created_by(id, name, role),
       tasks(
         *,
-        assignee: users!assignee_id(*),
+        assignee: users!assignee_id(id, name, avatar_url, role),
         creator: users!created_by(id, name, role),
-        comments: task_comments(*, author: users(*))
+        comments: task_comments(*, author: users(id, name, avatar_url, role))
       )
     `)
     .eq('project_id', id)

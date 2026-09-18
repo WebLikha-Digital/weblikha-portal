@@ -238,14 +238,19 @@ export type ProjectCardData = ProjectSummary & {
   members: (ProjectMember & { user: User })[]
 }
 
-/** Task comment with its author user data */
+/** Task comment with its author user data. The task_lists query this backs is
+ *  ungated (every viewer, clients included, receives it), and TodoItem only
+ *  ever renders the author's name and avatar — so this stays MentionableUser,
+ *  not the full row (email, employment_type, phone, birthdate, bio...). */
 export interface TaskCommentWithAuthor extends TaskComment {
-  author: User | null
+  author: MentionableUser | null
 }
 
-/** Task with assignee and comment thread — as rendered in TodosTab */
+/** Task with assignee and comment thread — as rendered in TodosTab. Same
+ *  ungated-query reasoning as TaskCommentWithAuthor: TodoItem only reads
+ *  assignee.name and assignee.avatar_url, so MentionableUser is enough. */
 export type TaskWithMeta = Task & {
-  assignee: User | null
+  assignee: MentionableUser | null
   comments: TaskCommentWithAuthor[]
   /** Joined creator — role drives the "Added by client" badge */
   creator:  Pick<User, 'id' | 'name' | 'role'> | null

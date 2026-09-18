@@ -107,6 +107,11 @@ stable
 security definer
 set search_path = public, pg_temp
 as $$
+  -- The coalesce fallback (15) deliberately duplicates the column default
+  -- above. It is not a "just in case" number: if the app_settings row is ever
+  -- missing, this fails OPEN — a wider window, not a closed one — since
+  -- app_settings has no delete policy, that row cannot actually be removed
+  -- through RLS today, so this path is not currently reachable.
   select now() < created_at + make_interval(
     mins => coalesce((select s.edit_window_minutes from public.app_settings s where s.id = 1), 15)
   );
@@ -181,6 +186,9 @@ create policy "messages: admin reads all"
   on public.messages for select
   using (public.is_admin());
 
+-- author_id = auth.uid() narrows what 004's FOR ALL policy allowed (any
+-- author_id). Safe: the app always sets the author to the current user on
+-- insert, so no call site relied on posting as someone else.
 drop policy if exists "messages: admin inserts own" on public.messages;
 create policy "messages: admin inserts own"
   on public.messages for insert
@@ -195,6 +203,22 @@ create policy "messages: admin deletes any"
 -- variants. 020's immutable-columns trigger still blocks is_client_visible,
 -- project_id and author_id, so this only ever governs title, body, category
 -- and mentions.
+--
+-- 020's "messages: provider edits own" and 014's "messages: client edits own"
+-- both also required project membership (020 in USING and WITH CHECK; 014 in
+-- WITH CHECK) — that check was dropped when the two collapsed into this one
+-- policy, above. Restored here via can_read_message() (022): a caller who can
+-- no longer read the post — a provider removed from the project, or a
+-- revoked client, whose project_members row is deleted by design — can no
+-- longer edit it either, closing the silent-rewrite path (RLS would return
+-- zero rows to the SELECT anyway, so this also stops the app showing "You can
+-- only edit your own messages" over a row that was in fact rewritten).
+-- is_admin() is checked explicitly rather than relying on can_read_message()
+-- alone: that function already returns true for any approved admin regardless
+-- of membership, so the two are equivalent for an approved admin today, but
+-- spelling out is_admin() keeps an admin's own-post edit right from silently
+-- depending on can_read_message()'s internals if that function is ever
+-- narrowed for other callers.
 drop policy if exists "messages: provider edits own" on public.messages;
 drop policy if exists "messages: client edits own"   on public.messages;
 
@@ -203,9 +227,13 @@ create policy "messages: author updates own in window"
   on public.messages for update
   using (
     author_id = auth.uid()
+    and (public.is_admin() or public.can_read_message(id))
     and public.within_edit_window(created_at)
   )
-  with check (author_id = auth.uid());
+  with check (
+    author_id = auth.uid()
+    and (public.is_admin() or public.can_read_message(id))
+  );
 
 
 -- =============================================================================
@@ -262,6 +290,9 @@ create policy "task_comments: admin reads all"
   on public.task_comments for select
   using (public.is_admin());
 
+-- author_id = auth.uid() narrows what 008's FOR ALL policy allowed (any
+-- author_id). Safe: the app always sets the author to the current user on
+-- insert, so no call site relied on posting as someone else.
 drop policy if exists "task_comments: admin inserts own" on public.task_comments;
 create policy "task_comments: admin inserts own"
   on public.task_comments for insert
@@ -272,6 +303,11 @@ create policy "task_comments: admin deletes any"
   on public.task_comments for delete
   using (public.is_admin());
 
+-- Unlike messages (F1, above) and message_replies (§5, below), this policy has
+-- never re-checked project membership on update — that gap predates this
+-- migration (it was already true of 009's original policy) and is left as is
+-- here rather than widened in scope. messages and message_replies both check
+-- it; task_comments does not.
 drop policy if exists "task_comments: author updates own" on public.task_comments;
 create policy "task_comments: author updates own"
   on public.task_comments for update
@@ -367,4 +403,6 @@ create trigger message_replies_force_created_at_now
 --   - As the author, INSERT a message/task_comment/message_reply with an
 --     explicit far-future or far-past created_at in the payload → stored row
 --     has created_at = now(), not the submitted value.
+--   - Remove yourself from a project (or revoke a client), then PATCH your own
+--     message from within the window → 0 rows.
 -- =============================================================================

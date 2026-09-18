@@ -180,13 +180,13 @@ export function MessageReplyThread({
                     {isEdited(reply) && ' · Edited'}
                   </span>
 
-                  {(isAuthor || canDelete) && editingId !== reply.id && (
-                    <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
+                  {canDelete && editingId !== reply.id && (
+                    <span className="ml-auto flex items-center gap-0.5 opacity-100 sm:opacity-0 transition-opacity duration-150 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
                       {isAuthor && (
                         <button
                           type="button"
                           className={iconButton}
-                          disabled={isPending}
+                          disabled={isPending || editingId !== null}
                           onClick={() => {
                             setEditing(reply.id)
                             setEditDraft({

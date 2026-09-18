@@ -418,7 +418,12 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               e.preventDefault()
               onSubmitShortcut()
             }
-            if (e.key === 'Escape' && onEscape) onEscape()
+            if (e.key === 'Escape' && onEscape) {
+              // Keep Escape from bubbling to a surrounding modal's document
+              // listener — it should cancel the edit, not close the modal.
+              e.stopPropagation()
+              onEscape()
+            }
           }}
         />
 

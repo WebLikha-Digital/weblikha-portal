@@ -142,6 +142,22 @@ export interface MessageCategory {
   updated_at:  string
 }
 
+/** A reply on a message board post (migration 022). Flat — no nesting. */
+export interface MessageReply {
+  id:         string
+  message_id: string
+  author_id:  string | null
+  body:       string          // Rich-text HTML
+  mentions:   string[]
+  created_at: string
+  updated_at: string
+}
+
+/** A reply joined with its author, as the project page loads it. */
+export interface MessageReplyWithAuthor extends MessageReply {
+  author: Pick<User, 'id' | 'name' | 'avatar_url' | 'role'> | null
+}
+
 export interface PerformancePeriod {
   id:               string
   user_id:          string
@@ -222,6 +238,7 @@ export interface TaskListWithTasks extends TaskList {
 export interface MessageWithAuthor extends Message {
   author:   Pick<User, 'id' | 'name' | 'avatar_url' | 'role'> | null
   category: Pick<MessageCategory, 'id' | 'name' | 'emoji' | 'archived_at'> | null
+  replies:  MessageReplyWithAuthor[]
 }
 
 /** Performance period joined with the team member's user row */
@@ -334,6 +351,7 @@ export type NotificationType =
   | 'client_task'
   | 'client_message'
   | 'message_mention'
+  | 'message_reply'
 
 /** notifications table row (named to avoid clashing with the DOM Notification type) */
 export interface AppNotification {
@@ -345,6 +363,7 @@ export interface AppNotification {
   task_id:    string | null
   comment_id: string | null
   message_id: string | null   // Set for client_message notifications (migration 020)
+  reply_id:   string | null
   read_at:    string | null
   created_at: string
 }

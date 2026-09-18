@@ -46,6 +46,12 @@ export default async function PortalLayout({
     redirect('/pending')
   }
 
+  // Onboarding gate — everyone completes it once. Keyed on the timestamp alone,
+  // so clearing a profile field later does not send someone back here.
+  if (!profile.onboarded_at) {
+    redirect('/onboarding')
+  }
+
   const user = profile as User
 
   // Agency-wide editing window (023). Non-essential to rendering: if it cannot

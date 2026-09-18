@@ -14,11 +14,10 @@
  */
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { Resend } from 'resend'
 import { sendPushToUsers } from '@/lib/push'
-import { getSiteUrl } from '@/lib/site-url'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { emailMentions, escapeHtml, readNotificationRows } from '@/lib/message-delivery'
 import {
   messageDraftError, normalizeMentions, type MessageDraft,
 } from '@/lib/messages'
@@ -116,12 +115,6 @@ export async function deleteMessage(messageId: string, projectId: string): Promi
 
 // ── Delivery ───────────────────────────────────────────────────────────────────
 
-interface NotificationRow {
-  user_id: string
-  type:    string
-  actor:   { name: string } | null
-}
-
 /**
  * Best-effort: never fails the post. Service-role client because notification
  * rows are readable only by their owner.
@@ -134,14 +127,8 @@ async function deliverNotifications(
 ): Promise<void> {
   try {
     const admin = createAdminClient()
-    const { data, error } = await admin
-      .from('notifications')
-      .select('user_id, type, actor:users!notifications_actor_id_fkey(name)')
-      .eq('message_id', messageId)
-      .eq('created_at', writtenAt)
-    if (error) throw error
+    const rows  = await readNotificationRows(admin, 'message_id', messageId, writtenAt)
 
-    const rows      = (data ?? []) as unknown as NotificationRow[]
     const actorName = rows[0]?.actor?.name ?? 'Someone'
     const url       = `/projects/${projectId}?tab=messages&message=${messageId}`
 
@@ -158,64 +145,14 @@ async function deliverNotifications(
       body:  'Tap to open the message.',
       url,
     })
-    await emailMentions(admin, mentionRecipients, actorName, title, url)
+    await emailMentions(admin, mentionRecipients, {
+      actorName,
+      subject: `${actorName} mentioned you in "${title}"`,
+      heading: `${actorName} mentioned you`,
+      line:    `You were mentioned in the message <strong style="color:#ffffff;">${escapeHtml(title)}</strong>.`,
+      path:    url,
+    })
   } catch (err) {
     console.error('[messages] Failed to deliver notifications:', err)
-  }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-async function emailMentions(
-  admin: ReturnType<typeof createAdminClient>,
-  userIds: string[],
-  actorName: string,
-  title: string,
-  path: string,
-): Promise<void> {
-  if (userIds.length === 0) return
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    console.warn('[messages] RESEND_API_KEY not set — skipping mention emails')
-    return
-  }
-
-  const { data, error } = await admin.from('users').select('email').in('id', userIds)
-  if (error) throw error
-  const recipients = (data ?? []) as unknown as { email: string }[]
-
-  const link      = `${getSiteUrl()}${path}`
-  const safeActor = escapeHtml(actorName)
-  const safeTitle = escapeHtml(title)
-  const resend    = new Resend(apiKey)
-
-  const results = await Promise.all(recipients.map(r =>
-    resend.emails.send({
-      from:    process.env.RESEND_FROM ?? 'Weblikha Portal <onboarding@resend.dev>',
-      to:      r.email,
-      subject: `${actorName} mentioned you in "${title}"`,
-      html: `
-        <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#101010;color:#ffffff;border-radius:12px;">
-          <h1 style="font-size:18px;margin:0 0 16px;">${safeActor} mentioned you</h1>
-          <p style="color:#b3b3b3;line-height:1.6;margin:0 0 24px;">
-            You were mentioned in the message
-            <strong style="color:#ffffff;">${safeTitle}</strong>.
-          </p>
-          <a href="${link}"
-             style="display:inline-block;background:#FDD33C;color:#101010;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;">
-            Open the message
-          </a>
-        </div>`,
-    }),
-  ))
-  for (const r of results) {
-    if (r.error) console.error('[messages] Resend error:', r.error.message)
   }
 }

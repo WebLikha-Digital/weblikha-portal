@@ -8,9 +8,9 @@ Last synced 2026-09-18.
 ## Current focus: the client portal
 
 Mid-build. Stages 1 and 2 are **done, deployed to prod, and the invite flow is tested end
-to end on both dev and prod**. **Stage 3 (the message board) is built on
-`feature/message-board`; migrations 020 + 021 are applied on dev and prod, so the branch
-is ready to merge** — see below. Stage 4's client
+to end on both dev and prod**. **Stage 3 (the message board) is shipped: merged
+via PR #6 and deployed to production, with migrations 020 + 021 applied to dev and prod
+first** — see below. Stage 4's client
 dashboard is still missing — see the table below for exactly what of Stage 4 already
 landed, and "Not done yet" at the bottom of this file for the full backlog.
 
@@ -21,7 +21,7 @@ landed, and "Not done yet" at the bottom of this file for the full backlog.
 | — | Migration 014 (client collab) + types | ✅ Applied to **dev and prod**, and recorded in both history tables since the 2026-09-17 cleanup |
 | 1 | Invite + set-password auth | ✅ Done and **tested end to end on dev AND prod** — invite → email → `/auth/confirm` → set password → dashboard |
 | 2 | `/clients` admin page + nav | ✅ Done, merged (PR #3), deployed to prod |
-| 3 | Message board | ✅ Built on `feature/message-board`: compose/edit/delete, default-internal visibility switch, client posts notify the team, URL deep links |
+| 3 | Message board | ✅ Shipped (PR #6, merged 2026-09-18, prod at `fa602ec`): compose/edit/delete, default-internal visibility switch, client posts notify the team, URL deep links, rich text + @mentions + categories |
 | 4 | Client dashboard + project view | 🟡 Partial: client nav set, `/rewards` guard, to-do capability gates, Team tab names-and-roles-only, "empty to-do list" query fix. **The client dashboard itself is not built.** |
 | — | Verification pass | 🟡 015–018 applied to dev **and** prod. PRs #3 and #4 merged; prod deployed at `27ab19d`. The four client-portal findings were fixed in code but **not individually re-tested** against the applied migrations. |
 
@@ -40,8 +40,9 @@ five tabs; `MobileNav` renders the sidebar in its drawer.
 
 ### Stage 3 — message board
 
-Built. Spec and plan: `docs/superpowers/{specs,plans}/2026-09-17-message-board*`. Posts
-only — replies are a later stage. Team members get a "Visible to client" switch, **off by
+Shipped — PR #6 merged 2026-09-18, production at `fa602ec`. Spec and plan:
+`docs/superpowers/{specs,plans}/2026-09-17-message-board*`. Posts, plus a flat reply
+thread per post (migration 022, below). Team members get a "Visible to client" switch, **off by
 default**; the submit button reads "Post internally" / "Post to client". Clients have no
 switch. Visibility is locked after posting for every role (migration 020 trigger). Client
 posts notify approved admins and approved project providers (bell + push). The project
@@ -52,6 +53,11 @@ rich-text bodies via a shared `RichTextEditor`/`RichTextBody` also used by task 
 @mentions of project members and admins with bell, push and email; agency-wide
 admin-editable categories that archive rather than delete. Clients are never mentionable or
 notified on internal posts. Migration 021.
+
+Replies shipped 2026-09-18 (spec `docs/superpowers/specs/2026-09-18-message-replies-design.md`,
+migration 022): a flat thread per post, visibility inherited from the post, notifying the
+post's author and everyone already in the thread. Editing a reply notifies nobody, including
+for a newly added mention.
 
 ### Stage 4 — client experience (dashboard still to build)
 
@@ -98,6 +104,7 @@ items specifically:
   The order mattered: merging first would have shipped a bell query embedding `messages`
   through `notifications.message_id`, which errors on a database without 020/021 and empties
   every user's notification dropdown.
+- Apply 022 to dev, run the reply checklist, apply to prod, then merge.
 
 ---
 
@@ -317,8 +324,11 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
 
 ### The client portal's remaining work
 
-1. ~~**Stage 3 — the message board.**~~ Built 2026-09-17 — see the Stage 3 section above.
-   Follow-up stage: replies on messages.
+1. ~~**Stage 3 — the message board.**~~ Shipped 2026-09-18 (PR #6).
+   **Not yet exercised in a browser against the applied migrations** — the
+   feature was gated on typecheck, build and review only, so the first real pass over
+   formatting, image paste, mentions (incl. a client mentioned on an internal post),
+   categories and legacy plain-text posts is still outstanding.
 2. **Stage 4 — the client dashboard itself.** Not built. Should carry: project cards with
    status + progress, the client's own open requests, recent shared messages, and upcoming +
    overdue deadlines. A client currently lands on `/dashboard` and gets the **provider**
@@ -396,10 +406,25 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
     lock. Existing rows already satisfy the widened list; run `validate constraint` off-peak
     if you want it marked valid.
 
+### Raised by the 022 review pass (2026-09-18), deliberately deferred
+
+22. **Notification deep links trust the caller's `projectId`.** `createMessage` and
+    `createReply` build the push/email URL from the `projectId` argument, which RLS never
+    checks against the post (it validates the message or reply id instead). A crafted call
+    could send real recipients a link to an unrelated project. Both triggers already know the
+    true `project_id` — reading it back beside the title would close it for both.
+23. **A reply (or post) by a deleted user shows "Edited" forever.** `ON DELETE SET NULL` on
+    `author_id` fires the `set_updated_at` trigger, so `updated_at > created_at`. Consistent
+    with posts since 002, so not new — but it will look wrong the first time someone notices.
+24. **`can_read_message()` (022) requires `approved = true`; the message policies it mirrors
+    do not.** A revoked-but-still-signed-in user can read a post directly through PostgREST
+    and get zero replies for it. Fail-closed and documented in the migration; the real fix is
+    to make approval consistent across 004/020's policies.
+
 ### Repo hygiene
 
-22. **`tsconfig.tsbuildinfo` is tracked** — a build artifact that dirties the tree on every
+25. **`tsconfig.tsbuildinfo` is tracked** — a build artifact that dirties the tree on every
     build. Wants a `.gitignore` entry plus `git rm --cached`.
-23. **No test framework at all.** Every change this session was gated on `npx tsc --noEmit`,
+26. **No test framework at all.** Every change this session was gated on `npx tsc --noEmit`,
     review, and manual checks. Adding one is a real decision that has never been made — not
     something to bolt on mid-feature.

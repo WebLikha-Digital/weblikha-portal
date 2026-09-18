@@ -24,6 +24,11 @@ export interface MessageDraft {
   categoryId: string | null
 }
 
+export interface ReplyDraft {
+  bodyHtml: string
+  mentions: string[]
+}
+
 /** Editor output always starts with a tag; anything else is legacy plain text. */
 function isHtml(body: string): boolean {
   return body.trimStart().startsWith('<')
@@ -68,6 +73,19 @@ export function messageDraftError(draft: MessageDraft): string | null {
   }
   if (!draft.mentions.every(id => UUID_RE.test(id))) return 'A mention in this message is invalid.'
   if (draft.categoryId !== null && !UUID_RE.test(draft.categoryId)) return 'That category is invalid.'
+  return null
+}
+
+/** Same body and mention rules as a post, without a title or category. */
+export function replyDraftError(draft: ReplyDraft): string | null {
+  if (isBodyEmpty(draft.bodyHtml)) return 'Write something in the reply.'
+  if (draft.bodyHtml.length > MESSAGE_BODY_MAX) {
+    return 'This reply is too long. Shorten it or remove some formatting.'
+  }
+  if (draft.mentions.length > MESSAGE_MENTIONS_MAX) {
+    return `You can mention at most ${MESSAGE_MENTIONS_MAX} people.`
+  }
+  if (!draft.mentions.every(id => UUID_RE.test(id))) return 'A mention in this reply is invalid.'
   return null
 }
 

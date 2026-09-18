@@ -134,6 +134,21 @@ export function MessagesTab({
                     <span>{msg.author?.name ?? 'Unknown'}</span>
                     <span aria-hidden>·</span>
                     <span>{formatRelative(msg.created_at)}</span>
+                    {msg.replies.length > 0 && (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span>
+                          {msg.replies.length === 1 ? '1 reply' : `${msg.replies.length} replies`}
+                          {' · last '}
+                          {formatRelative(
+                            msg.replies.reduce(
+                              (latest, r) => (r.created_at > latest ? r.created_at : latest),
+                              msg.replies[0]?.created_at ?? msg.created_at,
+                            ),
+                          )}
+                        </span>
+                      </>
+                    )}
                     {isEdited(msg) && (
                       <>
                         <span aria-hidden>·</span>
@@ -181,10 +196,13 @@ export function MessagesTab({
 
       {openMessage && !editing && (
         <MessageDetailModal
+          key={openMessage.id}
           message={openMessage}
           projectId={projectId}
           viewerRole={viewerRole}
           currentUserId={currentUserId}
+          members={members}
+          admins={admins}
           onClose={closePost}
           onEdit={() => setEditing(openMessage)}
           onDeleteStart={id => quietIds.current.add(id)}

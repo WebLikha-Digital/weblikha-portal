@@ -13,7 +13,8 @@ import { Avatar, Button } from '@/components/ui'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { toast, withToast } from '@/components/ui/toast'
 import { formatRelative } from '@/lib/utils'
-import { isEdited } from '@/lib/messages'
+import { canEditWithin, isEdited } from '@/lib/messages'
+import { useEditWindow } from '@/components/layout/EditWindowProvider'
 import { deleteMessage } from '@/app/(portal)/projects/message-actions'
 import { RichTextBody } from '@/components/modules/editor/RichTextBody'
 import { MessageCategoryPill } from './MessageCategoryPill'
@@ -48,6 +49,10 @@ export function MessageDetailModal({
   const [isPending, startTransition] = useTransition()
   const canManage = viewerRole === 'admin' || message.author_id === currentUserId
   const isClient  = viewerRole === 'client'
+  const editWindowMinutes = useEditWindow()
+  // Only the author, and only inside the window (023). Admins keep Delete.
+  const canEdit = message.author_id === currentUserId
+    && canEditWithin(message.created_at, editWindowMinutes)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -152,27 +157,31 @@ export function MessageDetailModal({
           />
         </div>
 
-        {canManage && (
+        {(canManage || canEdit) && (
           <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-4 border-t border-subtle">
-            <Button
-              variant="ghost"
-              size="md"
-              icon={<Trash2 className="size-4" />}
-              onClick={handleDelete}
-              loading={isPending}
-              className="text-tertiary hover:text-danger hover:bg-danger/10"
-            >
-              Delete
-            </Button>
-            <Button
-              variant="outline"
-              size="md"
-              icon={<Pencil className="size-4" />}
-              onClick={onEdit}
-              disabled={isPending}
-            >
-              Edit
-            </Button>
+            {canManage && (
+              <Button
+                variant="ghost"
+                size="md"
+                icon={<Trash2 className="size-4" />}
+                onClick={handleDelete}
+                loading={isPending}
+                className="text-tertiary hover:text-danger hover:bg-danger/10"
+              >
+                Delete
+              </Button>
+            )}
+            {canEdit && (
+              <Button
+                variant="outline"
+                size="md"
+                icon={<Pencil className="size-4" />}
+                onClick={onEdit}
+                disabled={isPending}
+              >
+                Edit
+              </Button>
+            )}
           </div>
         )}
       </div>

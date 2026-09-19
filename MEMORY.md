@@ -7,12 +7,12 @@ Last synced 2026-09-19.
 
 ## Current focus: the client portal
 
-Mid-build. Stages 1 and 2 are **done, deployed to prod, and the invite flow is tested end
-to end on both dev and prod**. **Stage 3 (the message board) is fully shipped —
+Stages 1–4 are **done**. Stages 1 and 2 are **deployed to prod, and the invite flow is
+tested end to end on both dev and prod**. **Stage 3 (the message board) is fully shipped —
 posts, reply threads and the editing window, merged as PRs #6, #7 and #8 and deployed to
-production, with migrations 020–023 applied to dev and prod first** — see below. Stage 4's
-client dashboard is still missing — see the table below for exactly what of Stage 4 already
-landed, and "Not done yet" at the bottom of this file for the full backlog.
+production, with migrations 020–023 applied to dev and prod first** — see below. **Stage 4
+(the client dashboard) shipped 2026-09-19, no migration** — see the table below for exactly
+what of Stage 4 landed, and "Not done yet" at the bottom of this file for the full backlog.
 
 ### Stage status
 
@@ -22,7 +22,7 @@ landed, and "Not done yet" at the bottom of this file for the full backlog.
 | 1 | Invite + set-password auth | ✅ Done and **tested end to end on dev AND prod** — invite → email → `/auth/confirm` → set password → dashboard |
 | 2 | `/clients` admin page + nav | ✅ Done, merged (PR #3), deployed to prod |
 | 3 | Message board | ✅ Shipped (PRs #6, #7, #8, merged 2026-09-18, prod at `2c52643`): compose/edit/delete, default-internal visibility switch, client posts notify the team, URL deep links, rich text + @mentions + categories, reply threads, author-only editing inside a window |
-| 4 | Client dashboard + project view | 🟡 Partial: client nav set, `/rewards` guard, to-do capability gates, Team tab names-and-roles-only, "empty to-do list" query fix. **The client dashboard itself is not built.** |
+| 4 | Client dashboard + project view | ✅ Shipped: client nav set, `/rewards` guard, to-do capability gates, Team tab names-and-roles-only, "empty to-do list" query fix, and the client dashboard itself (project cards, open requests, recent shared messages, upcoming/overdue deadlines) — spec `docs/superpowers/specs/2026-09-19-client-dashboard-design.md`, no migration. |
 | — | Verification pass | 🟡 015–018 applied to dev **and** prod. PRs #3 and #4 merged; prod deployed at `27ab19d`. The four client-portal findings were fixed in code but **not individually re-tested** against the applied migrations. |
 
 **Post-launch checklist — all resolved (2026-07-13):**
@@ -388,11 +388,10 @@ Ordered roughly by value. Items 1 and 2 are the client portal's remaining stages
    feature was gated on typecheck, build and review only, so the first real pass over
    formatting, image paste, mentions (incl. a client mentioned on an internal post),
    categories and legacy plain-text posts is still outstanding.
-2. **Stage 4 — the client dashboard itself.** Not built. Should carry: project cards with
+2. ~~**Stage 4 — the client dashboard itself.**~~ Shipped 2026-09-19: project cards with
    status + progress, the client's own open requests, recent shared messages, and upcoming +
-   overdue deadlines. A client currently lands on `/dashboard` and gets the **provider**
-   dashboard (`dashboard/page.tsx` branches admin vs everyone-else) — queries return empty
-   rather than erroring, so it looks bare rather than broken.
+   overdue deadlines. `dashboard/page.tsx` is now a role router with a dedicated
+   `ClientDashboard`, rather than a client falling through to the provider view.
 3. **"Added by client" badge UI.** The data is now there — `created_by` is persisted on
    create and `creator (id, name, role)` is joined in `projects/[id]/page.tsx` — but no badge
    renders. `applyTemplate` also stamps `created_by` now, so template rows are distinguishable

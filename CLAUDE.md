@@ -51,7 +51,8 @@ src/
 │   │   └── pending/         Shown to signed-in but not-yet-approved users
 │   ├── (portal)/            Authenticated pages — PortalShell layout applied here
 │   │   ├── layout.tsx       Checks auth + approval, fetches user, renders PortalShell
-│   │   ├── dashboard/       Eagle's eye view (KPI cards)
+│   │   ├── dashboard/       Role router — renders AdminDashboard, ProviderDashboard or
+│   │   │                    ClientDashboard from components/modules/dashboard
 │   │   ├── profile/         Edit own profile — reachable from the sidebar user block
 │   │   ├── projects/        Project list + [id] detail (tabs: todos, messages, team)
 │   │   │   ├── actions.ts                   Server Actions: tasks, comments, members, claim
@@ -88,6 +89,8 @@ src/
 │       ├── projects/       ProjectCard, ProjectTabs(+Layout), TodosTab, TodoItem,
 │       │                   MessagesTab, TeamTab, CommentEditor, CommentBody, NewProjectModal
 │       ├── team/           TeamTabs, TeamPerformanceTable, MembersTab
+│       ├── dashboard/      AdminDashboard, ProviderDashboard, ClientDashboard,
+│       │                   ClientProjectCard, client-data
 │       ├── auth/           LoginForm (password + Google + magic-link fallback)
 │       ├── settings/       ApprovalQueue, TemplateBuilder, EditWindowCard
 │       └── profile/        OnboardingForm, ProfileForm, AvatarUploader, PersonMeta
@@ -341,15 +344,18 @@ Threshold for loyalty incentive: **1,000 pts/month**. Admin views/overrides `adm
 ## Client portal
 
 **Status:** invite/auth and the `/clients` admin page are shipped and live in production;
-the invite flow is tested end to end on dev and prod. The **message board** is built
-(Stage 3); the **client dashboard** is not. See @MEMORY.md → "Not done yet" for the backlog.
+the invite flow is tested end to end on dev and prod. The **message board** (Stage 3) and
+the **client dashboard** (Stage 4) are both built. See @MEMORY.md → "Not done yet" for
+the backlog.
 
 Invited clients collaborate on the projects they are assigned to. Agreed behaviour —
 these were decisions, not guesses, so don't quietly redesign them:
 
 **Clients can:** file tasks (worth 0 points until an admin triages them), create phases,
 assign a task to anyone already on that project, post on the message board, and see the
-project's full to-do list including internal tasks.
+project's full to-do list including internal tasks. Signing in lands them on a dashboard
+showing their projects with progress and team, their own open requests, recent shared
+posts and what is due.
 **Clients cannot:** apply phase templates, mark anything done, reach Revenue or Rewards,
 see project budgets, or see `employment_type` (in-house vs outsource) on the Team tab —
 that one is agency-internal. The Team tab shows names and roles only.

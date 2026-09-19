@@ -29,8 +29,6 @@ export interface ClientTeamMember {
   name:       string
   avatar_url: string | null
   role:       UserRole
-  job_title:  string | null
-  timezone:   string | null
 }
 
 export interface ClientProjectSummary {
@@ -107,9 +105,24 @@ interface MessageRow {
   author:     { name: string } | null
 }
 
+/**
+ * `YYYY-MM-DD` for `when` in `timeZone`. en-CA formats as ISO, which is what the
+ * date columns compare against.
+ */
+function dayKey(when: Date, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(when)
+  } catch {
+    return when.toISOString().slice(0, 10)
+  }
+}
+
 export async function loadClientDashboard(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
+  viewerTimezone: string | null,
 ): Promise<ClientDashboardData> {
   // Membership first: RLS on `projects` already limits rows, but going through
   // project_members matches how the projects page reads and keeps the `.in()`
@@ -127,7 +140,7 @@ export async function loadClientDashboard(
       .from('projects')
       .select(`
         id, name, status, end_date,
-        members: project_members(user: users(id, name, avatar_url, role, job_title, timezone))
+        members: project_members(user: users(id, name, avatar_url, role))
       `)
       .in('id', projectIds)
       .neq('status', 'archived')
@@ -155,10 +168,15 @@ export async function loadClientDashboard(
 
   const nameById = new Map(projectRows.map(p => [p.id, p.name]))
 
+  // A due date is a calendar day, so "today" has to be the VIEWER's calendar
+  // day. The server runs in UTC: for a Manila client (UTC+8) a UTC day key
+  // still reads as yesterday until 8am local, which would show a task that
+  // went overdue at midnight as still upcoming for those eight hours. Falls
+  // back to the agency's own zone for anyone who has no timezone set.
+  const zone      = viewerTimezone ?? 'Asia/Manila'
   const now       = new Date()
-  const todayKey  = now.toISOString().slice(0, 10)
-  const horizon   = new Date(now.getTime() + UPCOMING_DAYS * 24 * 60 * 60 * 1000)
-    .toISOString().slice(0, 10)
+  const todayKey  = dayKey(now, zone)
+  const horizon   = dayKey(new Date(now.getTime() + UPCOMING_DAYS * 24 * 60 * 60 * 1000), zone)
 
   const projects: ClientProjectSummary[] = projectRows.map(project => {
     const tasks = taskRows.filter(t => t.project_id === project.id)
@@ -192,7 +210,7 @@ export async function loadClientDashboard(
       title:        t.title,
       status:       t.status,
       project_id:   t.project_id,
-      project_name: nameById.get(t.project_id) ?? '',
+      project_name: nameById.get(t.project_id) ?? 'Project',
       due_date:     t.due_date,
     }))
 
@@ -205,12 +223,11 @@ export async function loadClientDashboard(
     title:        t.title,
     due_date:     t.due_date,
     project_id:   t.project_id,
-    project_name: nameById.get(t.project_id) ?? '',
+    project_name: nameById.get(t.project_id) ?? 'Project',
     overdue,
   })
 
-  // Date strings compare correctly as ISO text, which also sidesteps the
-  // timezone question: a due date is a calendar day, not an instant.
+  // ISO date strings compare correctly as text.
   const overdue  = dated.filter(t => t.due_date <  todayKey).map(t => toDeadline(t, true)).slice(0, DEADLINE_LIMIT)
   const upcoming = dated
     .filter(t => t.due_date >= todayKey && t.due_date <= horizon)

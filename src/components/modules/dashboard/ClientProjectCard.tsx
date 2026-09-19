@@ -33,9 +33,11 @@ export function ClientProjectCard({ project }: { project: ClientProjectSummary }
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-2xs text-secondary">
+        <span className={`text-2xs ${project.nextDue?.overdue ? 'text-danger' : 'text-secondary'}`}>
           {project.nextDue
-            ? <>Next: {project.nextDue.title} · {formatDateShort(project.nextDue.due_date)}</>
+            ? <>
+                {project.nextDue.overdue ? 'Overdue' : 'Next'}: {project.nextDue.title} · {formatDateShort(project.nextDue.due_date)}
+              </>
             : 'Nothing scheduled'}
         </span>
 

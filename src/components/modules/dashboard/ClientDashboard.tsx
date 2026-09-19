@@ -2,9 +2,18 @@ import Link from 'next/link'
 import { StatCard } from '@/components/ui'
 import { formatDateShort, formatRelative } from '@/lib/utils'
 import type { createClient } from '@/lib/supabase/server'
+import type { TaskStatus } from '@/types'
 import { dateLabel } from './dashboard-shared'
 import { loadClientDashboard } from './client-data'
 import { ClientProjectCard } from './ClientProjectCard'
+
+/** `Badge`'s `status` prop maps `ProjectStatus`, not `TaskStatus` — a request
+ * row needs its own small label instead of borrowing that component. */
+const REQUEST_STATUS_LABEL: Record<TaskStatus, string> = {
+  pending:     'Pending',
+  in_progress: 'In progress',
+  done:        'Done',
+}
 
 /**
  * CLIENT DASHBOARD
@@ -27,7 +36,7 @@ export async function ClientDashboard({
   userName:       string
   viewerTimezone: string | null
 }) {
-  const { projects, requests, overdue, upcoming, messages } =
+  const { projects, requests, requestCount, overdue, overdueCount, upcoming, messages } =
     await loadClientDashboard(supabase, userId, viewerTimezone)
 
   const activeProjects = projects.filter(p =>
@@ -45,13 +54,13 @@ export async function ClientDashboard({
         <p className="mt-1 text-xs text-secondary">{dateLabel}</p>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label="Active Projects" value={activeProjects.length} />
-        <StatCard label="Your Open Requests" value={requests.length} />
+        <StatCard label="Your Open Requests" value={requestCount} />
         <StatCard
           label="Overdue"
-          value={overdue.length}
-          valueColor={overdue.length > 0 ? 'danger' : 'default'}
+          value={overdueCount}
+          valueColor={overdueCount > 0 ? 'danger' : 'default'}
         />
       </div>
 
@@ -59,7 +68,7 @@ export async function ClientDashboard({
       <section className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className={panelTitle}>Your projects</h2>
-          <Link href="/projects" className="text-xs text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded">
+          <Link href="/projects" className="text-xs text-brand hover:underline transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded">
             View all
           </Link>
         </div>
@@ -102,12 +111,17 @@ export async function ClientDashboard({
                       <span className="block truncate text-2xs text-secondary">{request.project_name}</span>
                     </span>
                     <span className="shrink-0 whitespace-nowrap text-2xs text-tertiary">
-                      {request.due_date ? formatDateShort(request.due_date) : 'No date'}
+                      {REQUEST_STATUS_LABEL[request.status]} · {request.due_date ? formatDateShort(request.due_date) : 'No date'}
                     </span>
                   </Link>
                 </li>
               ))}
             </ul>
+          )}
+          {requestCount > requests.length && (
+            <p className="border-t border-subtle px-4 py-2 text-2xs text-tertiary">
+              Showing {requests.length} of {requestCount}
+            </p>
           )}
         </section>
 
@@ -163,6 +177,14 @@ export async function ClientDashboard({
               </li>
             ))}
           </ul>
+          {/* Only overdue has a pre-slice count: it accumulates with no upper
+           * bound, while upcoming is naturally capped by the 14-day horizon, so
+           * DEADLINE_LIMIT is realistically only ever hit on the overdue side. */}
+          {overdueCount > overdue.length && (
+            <p className="border-t border-subtle px-4 py-2 text-2xs text-tertiary">
+              Showing {overdue.length + upcoming.length} of {overdueCount + upcoming.length}
+            </p>
+          )}
         </section>
       )}
     </div>

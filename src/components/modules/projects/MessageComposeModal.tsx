@@ -29,15 +29,14 @@ import {
 import { CategoryPicker } from './CategoryPicker'
 import { CategoryManagerModal } from './CategoryManagerModal'
 import type {
-  MessageCategory, MessageWithAuthor, ProjectMember, User, UserRole,
-} from '@/types'
+  MessageCategory, MessageWithAuthor, ProjectMember, User, UserRole, MentionableUser } from '@/types'
 
 interface SharedProps {
   projectId:  string
   viewerRole: UserRole
   categories: MessageCategory[]
   members:    (ProjectMember & { user: User })[]
-  admins:     User[]
+  admins:     MentionableUser[]
   onClose:    () => void
 }
 

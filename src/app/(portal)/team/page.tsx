@@ -33,6 +33,22 @@ export default async function TeamPage({ searchParams }: Props) {
   const providerList = (providers ?? []) as User[]
   const providerIds  = providerList.map(u => u.id)
 
+  // birthdate lives in user_private (migration 024), not on users — 013's
+  // "approved members read directory" policy makes every column of users
+  // readable by any approved member, so birthdate cannot live there. This
+  // page is admin-only, so user_private's "owner or admin" policy lets this
+  // read every provider's row.
+  const birthdateByUser: Record<string, string | null> = {}
+  if (providerIds.length > 0) {
+    const { data: privateRows } = await supabase
+      .from('user_private')
+      .select('user_id, birthdate')
+      .in('user_id', providerIds)
+    for (const row of (privateRows ?? []) as { user_id: string; birthdate: string | null }[]) {
+      birthdateByUser[row.user_id] = row.birthdate
+    }
+  }
+
   // Performance rows for this period
   const { data: periods } = await supabase
     .from('performance_periods')
@@ -76,6 +92,7 @@ export default async function TeamPage({ searchParams }: Props) {
         providers={providerList}
         periods={(periods ?? []) as PerformancePeriod[]}
         projectStats={projectStats}
+        birthdateByUser={birthdateByUser}
         month={month}
         year={year}
       />

@@ -1,17 +1,17 @@
 # Project Memory — Weblikha Portal
 
 Consolidated session memory. Imported into Claude Code via `@MEMORY.md` in CLAUDE.md.
-Last synced 2026-09-18.
+Last synced 2026-09-19.
 
 ---
 
 ## Current focus: the client portal
 
 Mid-build. Stages 1 and 2 are **done, deployed to prod, and the invite flow is tested end
-to end on both dev and prod**. **Stage 3 (the message board) is shipped: merged
-via PR #6 and deployed to production, with migrations 020 + 021 applied to dev and prod
-first** — see below. Stage 4's client
-dashboard is still missing — see the table below for exactly what of Stage 4 already
+to end on both dev and prod**. **Stage 3 (the message board) is fully shipped —
+posts, reply threads and the editing window, merged as PRs #6, #7 and #8 and deployed to
+production, with migrations 020–023 applied to dev and prod first** — see below. Stage 4's
+client dashboard is still missing — see the table below for exactly what of Stage 4 already
 landed, and "Not done yet" at the bottom of this file for the full backlog.
 
 ### Stage status
@@ -21,7 +21,7 @@ landed, and "Not done yet" at the bottom of this file for the full backlog.
 | — | Migration 014 (client collab) + types | ✅ Applied to **dev and prod**, and recorded in both history tables since the 2026-09-17 cleanup |
 | 1 | Invite + set-password auth | ✅ Done and **tested end to end on dev AND prod** — invite → email → `/auth/confirm` → set password → dashboard |
 | 2 | `/clients` admin page + nav | ✅ Done, merged (PR #3), deployed to prod |
-| 3 | Message board | ✅ Shipped (PR #6, merged 2026-09-18, prod at `fa602ec`): compose/edit/delete, default-internal visibility switch, client posts notify the team, URL deep links, rich text + @mentions + categories |
+| 3 | Message board | ✅ Shipped (PRs #6, #7, #8, merged 2026-09-18, prod at `2c52643`): compose/edit/delete, default-internal visibility switch, client posts notify the team, URL deep links, rich text + @mentions + categories, reply threads, author-only editing inside a window |
 | 4 | Client dashboard + project view | 🟡 Partial: client nav set, `/rewards` guard, to-do capability gates, Team tab names-and-roles-only, "empty to-do list" query fix. **The client dashboard itself is not built.** |
 | — | Verification pass | 🟡 015–018 applied to dev **and** prod. PRs #3 and #4 merged; prod deployed at `27ab19d`. The four client-portal findings were fixed in code but **not individually re-tested** against the applied migrations. |
 
@@ -54,13 +54,13 @@ rich-text bodies via a shared `RichTextEditor`/`RichTextBody` also used by task 
 admin-editable categories that archive rather than delete. Clients are never mentionable or
 notified on internal posts. Migration 021.
 
-Replies shipped 2026-09-18 (spec `docs/superpowers/specs/2026-09-18-message-replies-design.md`,
-migration 022): a flat thread per post, visibility inherited from the post, notifying the
+Replies shipped 2026-09-18 — PR #7, migration 022 (spec
+`docs/superpowers/specs/2026-09-18-message-replies-design.md`): a flat thread per post, visibility inherited from the post, notifying the
 post's author and everyone already in the thread. Editing a reply notifies nobody, including
 for a newly added mention.
 
-Editing tightened 2026-09-18 (spec `docs/superpowers/specs/2026-09-18-edit-window-design.md`,
-migration 023): only the author may edit a post, reply or task comment, and only inside an
+Editing tightened 2026-09-18 — PR #8, migration 023 (spec
+`docs/superpowers/specs/2026-09-18-edit-window-design.md`): only the author may edit a post, reply or task comment, and only inside an
 agency-wide window (default 15 minutes, Settings → Content). Admins lost the FOR ALL write
 power that let them edit other people's content; they keep delete. Everything posted before
 023 is past the window, so it is no longer editable.
@@ -72,6 +72,54 @@ status + progress, the client's own open requests, recent shared messages, and u
 overdue deadlines. Project detail shows the **full** to-do list including internal tasks,
 with "Added by client" badges; template apply hidden; Team tab shows **names and roles only**
 (no `employment_type` — in-house vs outsource is agency-internal).
+
+### Onboarding and profiles (2026-09-18, migration 024)
+
+Not part of the client-portal stages above — a separate feature on
+`feature/onboarding-profiles`. Migration `024_user_profiles.sql` adds nullable profile
+columns to `users` (`timezone`, `job_title`, `location`, `bio`, `company`,
+`company_website`, `onboarded_at`) with CHECK constraints, a `guard_user_timezone()` trigger
+rejecting a non-IANA zone, and an `avatars` storage bucket (public read; insert/update/delete
+scoped to `avatars/{own id}/…`, size capped at 2 MB and MIME restricted to jpeg/png/webp at
+the bucket level, not just in the upload component). No new RLS on `users` — 016's guard
+still blocks writing `role`, `approved` or `email` through the same update.
+
+**Privacy fix, same migration, before it was ever applied anywhere:** `phone` and
+`birthdate` do NOT live on `users`. 013's "approved members read directory" policy grants
+SELECT on every column of `users` to any approved member (load-bearing — mentions, member
+pickers), so anything added to `users` is readable agency-wide the moment it exists. A phone
+number and a full date of birth are not that kind of information. Both now live in a new
+`public.user_private` table (`user_id` PK → `users`, `phone`, `birthdate`, `updated_at`),
+readable/writable only by its own owner or an admin. `completeOnboarding` and
+`updateProfile` write `users` first, then upsert `user_private` — the two writes are not
+atomic, so a failed second write throws rather than reporting success. `ProfileForm` takes
+`phone`/`birthdate` as explicit props (read separately by `/profile`'s page from
+`user_private`) rather than off its `user: User` prop. `ClientList` and `MembersTab` read the
+same way — `ClientRow.phone` and a `birthdateByUser` lookup, threaded down from
+`/clients` and `/team`'s page components — instead of off `User`.
+
+`/onboarding` (in `(auth)`) is a one-screen form — photo optional, phone, timezone
+pre-filled from the browser, company for clients — gated by a redirect in
+`(portal)/layout.tsx` when `onboarded_at` is null, the same checkpoint that sends
+unapproved users to `/pending`. `completeOnboarding` runs once and refuses to re-stamp.
+Every existing user, not just new signups, meets this screen once on their next sign-in,
+since `onboarded_at` is null for all of them until they pass through it.
+
+`/profile` (in `(portal)`, reachable from the sidebar user block) is the one-form, one-Save
+edit screen for the same fields plus name, job title, birthday, location and bio — email
+stays read-only. There is deliberately no password UI anywhere in either screen: the invite
+link and the forgot-password email already cover changing a password.
+
+`PersonMeta` surfaces job title, a formatted local time and birthdays where people already
+look: birthdays on the admin-only Team page only; local time and job title on the client
+list and a project's Team tab. A client viewer's member query was deliberately not widened,
+so clients still see no local time there. Also on this branch: the ungated admin
+mention-list query was narrowed to a new `MentionableUser` type, because `select('*')`
+against 024's wider `users` row would otherwise have shipped every admin's bio to client
+viewers (phone and birthdate were never at risk here — see the privacy fix above, they were
+never selectable through `MentionableUser`'s source query in the first place).
+
+**Deploy state:** 024 applied to dev and prod 2026-09-19 and tested on dev.
 
 ### Decisions already made — don't relitigate
 
@@ -114,6 +162,9 @@ items specifically:
 - ~~Apply 023 to dev and prod~~ — done 2026-09-18, tested on dev. (`app_settings` is a new
   table, so `NOTIFY pgrst, 'reload schema';` was needed after applying; when changing the
   window, reload the page — an open tab keeps the old number.)
+- ~~Apply 024 to dev and prod~~ — done 2026-09-19, tested on dev, with
+  `NOTIFY pgrst, 'reload schema';` after each (the `avatars` bucket, `user_private` and
+  the new columns were all new to PostgREST's cache).
 
 ---
 
@@ -124,7 +175,7 @@ Live on Vercel with separate production Supabase project `vhsuyouczctnkvnnjzgg` 
 vars; service role scoped to Production. A `supabase-keepalive-ping` scheduled task pings
 both projects every 3 days.
 
-**Migration state:** 001–023 applied on **both** dev and prod (020–023 applied 2026-09-18, each before the branch that needed it merged).
+**Migration state:** 001–024 applied on **both** dev and prod (020–023 on 2026-09-18, 024 on 2026-09-19 — each before the branch that needed it merged).
 
 **Migration cleanup (2026-09-17).** Two files had both been numbered 014 — web push and
 client collaboration, written on branches that never saw each other. Web push moved to

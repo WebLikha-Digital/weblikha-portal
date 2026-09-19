@@ -47,10 +47,12 @@ src/
 │   ├── (auth)/
 │   │   ├── login/           Server Component (reads ?error/?sent) + LoginForm client half
 │   │   ├── set-password/    Where an invited client lands from the invite email
+│   │   ├── onboarding/      One-time profile screen, gated on users.onboarded_at IS NULL
 │   │   └── pending/         Shown to signed-in but not-yet-approved users
 │   ├── (portal)/            Authenticated pages — PortalShell layout applied here
 │   │   ├── layout.tsx       Checks auth + approval, fetches user, renders PortalShell
 │   │   ├── dashboard/       Eagle's eye view (KPI cards)
+│   │   ├── profile/         Edit own profile — reachable from the sidebar user block
 │   │   ├── projects/        Project list + [id] detail (tabs: todos, messages, team)
 │   │   │   ├── actions.ts                   Server Actions: tasks, comments, members, claim
 │   │   │   ├── message-actions.ts           Server Actions: create/update/delete messages + push
@@ -87,7 +89,8 @@ src/
 │       │                   MessagesTab, TeamTab, CommentEditor, CommentBody, NewProjectModal
 │       ├── team/           TeamTabs, TeamPerformanceTable, MembersTab
 │       ├── auth/           LoginForm (password + Google + magic-link fallback)
-│       └── settings/       ApprovalQueue, TemplateBuilder, EditWindowCard
+│       ├── settings/       ApprovalQueue, TemplateBuilder, EditWindowCard
+│       └── profile/        OnboardingForm, ProfileForm, AvatarUploader, PersonMeta
 │
 ├── lib/
 │   ├── supabase/
@@ -152,7 +155,7 @@ Tailwind is configured to map those tokens to utility classes. Enforced by the
 ## Database schema
 
 Postgres on Supabase. All tables have Row Level Security enabled. Schema is built up
-across `supabase/migrations/001` → `023` (see the migration log below). The
+across `supabase/migrations/001` → `024` (see the migration log below). The
 authoritative TypeScript mirror is `src/types/index.ts` — update it whenever a column
 changes.
 
@@ -161,7 +164,14 @@ changes.
 ```
 users               id, email, name, role (admin|provider|client), specialty,
                     skills text[] (skills[0] = primary; specialty is legacy),
-                    employment_type (in-house|outsource), avatar_url, approved, timestamps
+                    employment_type (in-house|outsource), avatar_url, approved, timestamps,
+                    timezone, job_title, location, bio, company, company_website,
+                    onboarded_at. Deliberately does NOT carry phone or birthdate — see
+                    user_private below.
+user_private        user_id (PK, → users), phone, birthdate, updated_at. Split out of
+                    users (migration 024) because "users: approved members read
+                    directory" (013) makes every column of users readable by any
+                    approved member — RLS here restricts rows to their owner + admins.
 projects            id, name, client_name, status (discovery|in_progress|review|
                     completed|archived), start_date, end_date, budget, description, created_by
 project_members     id, project_id, user_id, role_in_project, joined_at  (join table)
@@ -245,6 +255,7 @@ template_tasks          id, template_task_list_id, title, description, points_va
     message_mention)
 022 message replies (message_replies, can_read_message, reply notifications)
 023 editing window (app_settings, within_edit_window, author-only updates)
+024 user profiles (profile columns, timezone guard, avatars bucket, onboarding gate)
 ```
 
 **Why 019 is out of chronological order.** Web push shipped first but was numbered 014 on a
@@ -315,6 +326,15 @@ Threshold for loyalty incentive: **1,000 pts/month**. Admin views/overrides `adm
 - Revenue table: **admin only** — providers and clients never see financial data
 - **Budget caveat:** RLS is row-level. The `projects: member or admin` policy hands any
   member the whole row including `budget`, so client screens must read `client_projects`.
+- **Profile columns (024):** self-editable by any signed-in user; 016's guard still blocks
+  a user from writing their own `role`, `approved` or `email` through the same update. The
+  `avatars` storage bucket is public to read, but insert/update/delete are scoped to
+  `avatars/{their own id}/…` — unlike `comment-attachments`, which is bucket-wide (see
+  @MEMORY.md → "Not done yet" #18).
+- **`phone` and `birthdate` live in `user_private`, not `users`** — because 013's "approved
+  members read directory" policy makes every column of `users` readable by any approved
+  member, and those two are not agency-wide information the way a job title or a timezone
+  is. `user_private` is readable and writable only by its owner or an admin.
 
 ---
 
@@ -343,6 +363,9 @@ Admin invites by email → Supabase `inviteUserByEmail` (service role) → email
 Resend SMTP settings → client clicks → **`/auth/confirm?token_hash=…&type=invite&next=/set-password`
 verifies the hash with `verifyOtp`** → `/set-password` calls `updateUser({ password })` →
 `/dashboard`.
+
+A signed-in user with `onboarded_at` still null is redirected to `/onboarding` by the
+`(portal)/layout.tsx` checkpoint — the same gate that sends unapproved users to `/pending`.
 
 **Why `token_hash` and not `?code=` — do not "simplify" this back.** `@supabase/ssr`
 hardcodes `flowType: 'pkce'`, so a `?code=` link can only be redeemed by a browser holding
@@ -530,7 +553,7 @@ Remove-Item Env:DB_URL                             # when done
 
 - **Dev Supabase project:** `tydreidoqzndxjftpyzd` (used locally via `.env.local`).
 - **Prod Supabase project:** `vhsuyouczctnkvnnjzgg`. Prod keys live only in Vercel env vars;
-  service role scoped to Production. Migrations 001–023 applied to **both** dev and prod (020–023 applied 2026-09-18).
+  service role scoped to Production. Migrations 001–024 applied to **both** dev and prod (020–023 applied 2026-09-18, 024 on 2026-09-19).
 - **Auth URL config** (Supabase → Authentication → URL Configuration): redirect URLs need a
   `/**` wildcard entry per environment, or Supabase silently ignores `redirectTo` and dumps
   the user on the Site URL. Dev: `http://localhost:3000/**`.

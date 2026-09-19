@@ -25,14 +25,13 @@ import { MessageComposeModal } from './MessageComposeModal'
 import { MessageDetailModal } from './MessageDetailModal'
 import { MessageCategoryPill } from './MessageCategoryPill'
 import type {
-  MessageCategory, MessageWithAuthor, ProjectMember, User, UserRole,
-} from '@/types'
+  MessageCategory, MessageWithAuthor, ProjectMember, User, UserRole, MentionableUser } from '@/types'
 
 interface MessagesTabProps {
   messages:      MessageWithAuthor[]
   categories:    MessageCategory[]
   members:       (ProjectMember & { user: User })[]
-  admins:        User[]
+  admins:        MentionableUser[]
   projectId:     string
   currentUserId: string
   viewerRole:    UserRole

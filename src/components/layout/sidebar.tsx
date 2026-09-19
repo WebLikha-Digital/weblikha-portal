@@ -217,17 +217,28 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
             collapsed ? 'flex-col gap-2 px-0 py-2' : 'gap-2.5 px-3 py-2',
           )}
         >
-          <Avatar name={user.name} src={user.avatar_url} size="sm" />
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-primary">{user.name}</p>
-              <p className="text-2xs text-secondary capitalize">{user.role}</p>
-            </div>
-          )}
+          <Link
+            href="/profile"
+            title="Your profile"
+            className={cn(
+              'flex min-w-0 flex-1 items-center gap-2.5 rounded-md transition-colors duration-fast',
+              'hover:bg-bg-overlay active:opacity-80 focus-visible:outline-none',
+              'focus-visible:ring-2 focus-visible:ring-brand',
+              collapsed ? 'justify-center' : 'px-1 py-0.5',
+            )}
+          >
+            <Avatar name={user.name} src={user.avatar_url} size="sm" />
+            {!collapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-primary">{user.name}</p>
+                <p className="text-2xs text-secondary capitalize">{user.role}</p>
+              </div>
+            )}
+          </Link>
           <form action="/auth/signout" method="post">
             <button
               type="submit"
-              className="text-tertiary hover:text-danger transition-colors duration-fast"
+              className="rounded-md text-tertiary transition-colors duration-fast hover:text-danger active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               title="Sign out"
               aria-label="Sign out"
             >

@@ -13,7 +13,7 @@ import { ProjectTabsLayout } from '@/components/modules/projects/ProjectTabsLayo
 import { formatDate, formatPeso } from '@/lib/utils'
 import { ChevronRight, CalendarDays, Wallet } from 'lucide-react'
 import type {
-  ProjectDetail, ProjectSummary, TaskListWithTasks, MessageWithAuthor, MessageCategory,
+  ProjectDetail, ProjectSummary, TaskListWithTasks, MessageWithAuthor, MessageCategory, MentionableUser,
   User, ProjectTemplate, UserRole,
 } from '@/types'
 
@@ -55,13 +55,16 @@ export default async function ProjectDetailPage({ params }: Props) {
   // `users(*)` would leak `employment_type`, `email`, `skills` and
   // `approved` for every project member into the client's RSC payload;
   // admin and provider viewers keep the full row (providers seeing
-  // `employment_type` is intended). The select string is kept literal per
-  // branch (not built at runtime) because supabase-js parses the select
-  // string at the type level.
+  // `employment_type` is intended). `job_title` and `timezone` are included
+  // here (unlike employment_type) — they're already shown to admins and
+  // neither lives in the sensitive `user_private` table, so PersonMeta on
+  // the Team tab can render for the client viewer it was built for. The
+  // select string is kept literal per branch (not built at runtime) because
+  // supabase-js parses the select string at the type level.
   const { data: projectRaw, error: projectError } = isClient
     ? await supabase
         .from('projects')
-        .select('id, name, client_name, status, start_date, end_date, description, created_at, members: project_members(*, user: users(id, name, avatar_url, specialty, role))')
+        .select('id, name, client_name, status, start_date, end_date, description, created_at, members: project_members(*, user: users(id, name, avatar_url, specialty, role, job_title, timezone))')
         .eq('id', id)
         .single()
     : await supabase
@@ -85,8 +88,11 @@ export default async function ProjectDetailPage({ params }: Props) {
 
   // Admins are mentionable in every project even when not on the roster —
   // matches the recipient boundary notifyMentions enforces server-side
+  // Explicit columns, NOT select('*'): this query is ungated, so its rows reach
+  // every viewer of the page including clients. Migration 024 added phone,
+  // birthdate and bio to this table — none of that belongs in a mention list.
   const { data: adminUsers } = await supabase
-    .from('users').select('*')
+    .from('users').select('id, name, avatar_url, role')
     .eq('role', 'admin').eq('approved', true)
     .order('name', { ascending: true })
 
@@ -118,6 +124,13 @@ export default async function ProjectDetailPage({ params }: Props) {
   // one FK to `users` (`created_by`), so its embed is unambiguous without a
   // hint — but the hint is added anyway for symmetry with `tasks` and to
   // stay unambiguous if a second FK is ever added there too.
+  // Explicit columns on `assignee` and `comments.author`, NOT `users(*)`:
+  // this whole result is handed straight to TodosTab (a client component)
+  // with no role branch, so every viewer — clients included — gets whatever
+  // is selected here. TodoItem only ever renders assignee.name/avatar_url
+  // and comment.author.name/avatar_url (see MentionableUser), so `users(*)`
+  // was shipping email, skills, approved, employment_type and, since
+  // migration 024, phone/birthdate/bio to every viewer of the page.
   const { data: taskListsRaw, error: taskListsError } = await supabase
     .from('task_lists')
     .select(`
@@ -125,9 +138,9 @@ export default async function ProjectDetailPage({ params }: Props) {
       creator: users!created_by(id, name, role),
       tasks(
         *,
-        assignee: users!assignee_id(*),
+        assignee: users!assignee_id(id, name, avatar_url, role),
         creator: users!created_by(id, name, role),
-        comments: task_comments(*, author: users(*))
+        comments: task_comments(*, author: users(id, name, avatar_url, role))
       )
     `)
     .eq('project_id', id)
@@ -233,7 +246,7 @@ export default async function ProjectDetailPage({ params }: Props) {
         messages={messages}
         categories={categories}
         members={members}
-        admins={(adminUsers ?? []) as User[]}
+        admins={(adminUsers ?? []) as MentionableUser[]}
         availableMembers={availableMembers}
         templates={templates}
         isAdmin={isAdmin}

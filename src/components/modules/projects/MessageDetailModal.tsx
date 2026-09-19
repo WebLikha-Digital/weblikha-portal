@@ -19,7 +19,7 @@ import { deleteMessage } from '@/app/(portal)/projects/message-actions'
 import { RichTextBody } from '@/components/modules/editor/RichTextBody'
 import { MessageCategoryPill } from './MessageCategoryPill'
 import { MessageReplyThread } from './MessageReplyThread'
-import type { MessageWithAuthor, ProjectMember, User, UserRole } from '@/types'
+import type { MessageWithAuthor, ProjectMember, User, UserRole, MentionableUser } from '@/types'
 
 interface MessageDetailModalProps {
   message:       MessageWithAuthor
@@ -27,7 +27,7 @@ interface MessageDetailModalProps {
   viewerRole:    UserRole
   currentUserId: string
   members:       (ProjectMember & { user: User })[]
-  admins:        User[]
+  admins:        MentionableUser[]
   onClose:        () => void
   onEdit:         () => void
   onDeleteStart:  (messageId: string) => void

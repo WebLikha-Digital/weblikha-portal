@@ -1,7 +1,7 @@
 # Project Memory — Weblikha Portal
 
 Consolidated session memory. Imported into Claude Code via `@MEMORY.md` in CLAUDE.md.
-Last synced 2026-09-18.
+Last synced 2026-09-19.
 
 ---
 
@@ -119,7 +119,7 @@ against 024's wider `users` row would otherwise have shipped every admin's bio t
 viewers (phone and birthdate were never at risk here — see the privacy fix above, they were
 never selectable through `MentionableUser`'s source query in the first place).
 
-**Deploy state: 024 is applied nowhere yet** — see "What Matthew still has to do" below.
+**Deploy state:** 024 applied to dev and prod 2026-09-19 and tested on dev.
 
 ### Decisions already made — don't relitigate
 
@@ -162,11 +162,9 @@ items specifically:
 - ~~Apply 023 to dev and prod~~ — done 2026-09-18, tested on dev. (`app_settings` is a new
   table, so `NOTIFY pgrst, 'reload schema';` was needed after applying; when changing the
   window, reload the page — an open tab keeps the old number.)
-- **Apply 024 to dev, run the checklist, apply to prod, then merge — and
-  `NOTIFY pgrst, 'reload schema';` after each**, since the storage bucket and the new
-  columns are both new to PostgREST's cache. Apply prod immediately before merging rather
-  than hours earlier: the old code on `main` still selects `users.*` in one ungated place,
-  so the migration should reach prod right before, not long before, that code stops running.
+- ~~Apply 024 to dev and prod~~ — done 2026-09-19, tested on dev, with
+  `NOTIFY pgrst, 'reload schema';` after each (the `avatars` bucket, `user_private` and
+  the new columns were all new to PostgREST's cache).
 
 ---
 
@@ -177,7 +175,7 @@ Live on Vercel with separate production Supabase project `vhsuyouczctnkvnnjzgg` 
 vars; service role scoped to Production. A `supabase-keepalive-ping` scheduled task pings
 both projects every 3 days.
 
-**Migration state:** 001–023 applied on **both** dev and prod (020–023 applied 2026-09-18, each before the branch that needed it merged).
+**Migration state:** 001–024 applied on **both** dev and prod (020–023 on 2026-09-18, 024 on 2026-09-19 — each before the branch that needed it merged).
 
 **Migration cleanup (2026-09-17).** Two files had both been numbered 014 — web push and
 client collaboration, written on branches that never saw each other. Web push moved to

@@ -553,7 +553,7 @@ Remove-Item Env:DB_URL                             # when done
 
 - **Dev Supabase project:** `tydreidoqzndxjftpyzd` (used locally via `.env.local`).
 - **Prod Supabase project:** `vhsuyouczctnkvnnjzgg`. Prod keys live only in Vercel env vars;
-  service role scoped to Production. Migrations 001–023 applied to **both** dev and prod (020–023 applied 2026-09-18).
+  service role scoped to Production. Migrations 001–024 applied to **both** dev and prod (020–023 applied 2026-09-18, 024 on 2026-09-19).
 - **Auth URL config** (Supabase → Authentication → URL Configuration): redirect URLs need a
   `/**` wildcard entry per environment, or Supabase silently ignores `redirectTo` and dumps
   the user on the Site URL. Dev: `http://localhost:3000/**`.

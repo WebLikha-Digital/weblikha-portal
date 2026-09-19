@@ -73,10 +73,9 @@ overdue deadlines. Project detail shows the **full** to-do list including intern
 with "Added by client" badges; template apply hidden; Team tab shows **names and roles only**
 (no `employment_type` — in-house vs outsource is agency-internal).
 
-### Onboarding and profiles (2026-09-18, migration 024)
+### Onboarding and profiles — shipped (PR #9, merged 2026-09-19, prod at `ee42231`)
 
-Not part of the client-portal stages above — a separate feature on
-`feature/onboarding-profiles`. Migration `024_user_profiles.sql` adds nullable profile
+Not part of the client-portal stages above — a separate feature, migration 024. Migration `024_user_profiles.sql` adds nullable profile
 columns to `users` (`timezone`, `job_title`, `location`, `bio`, `company`,
 `company_website`, `onboarded_at`) with CHECK constraints, a `guard_user_timezone()` trigger
 rejecting a non-IANA zone, and an `avatars` storage bucket (public read; insert/update/delete
@@ -119,7 +118,7 @@ against 024's wider `users` row would otherwise have shipped every admin's bio t
 viewers (phone and birthdate were never at risk here — see the privacy fix above, they were
 never selectable through `MentionableUser`'s source query in the first place).
 
-**Deploy state:** 024 applied to dev and prod 2026-09-19 and tested on dev.
+**Deploy state:** 024 applied to dev and prod 2026-09-19; PR #9 merged and verified on prod.
 
 ### Decisions already made — don't relitigate
 

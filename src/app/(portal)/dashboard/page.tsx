@@ -11,6 +11,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AdminDashboard } from '@/components/modules/dashboard/AdminDashboard'
 import { ProviderDashboard } from '@/components/modules/dashboard/ProviderDashboard'
+import { ClientDashboard } from '@/components/modules/dashboard/ClientDashboard'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
@@ -22,7 +23,7 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, name, role')
+    .select('id, name, role, timezone')
     .eq('id', authUser.id)
     .single()
 
@@ -30,6 +31,17 @@ export default async function DashboardPage() {
 
   if (profile.role === 'admin') {
     return <AdminDashboard supabase={supabase} />
+  }
+
+  if (profile.role === 'client') {
+    return (
+      <ClientDashboard
+        supabase={supabase}
+        userId={profile.id}
+        userName={profile.name ?? ''}
+        viewerTimezone={profile.timezone ?? null}
+      />
+    )
   }
 
   return (

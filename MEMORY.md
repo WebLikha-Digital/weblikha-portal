@@ -359,6 +359,37 @@ Two things do **not** work there:
 - **App emails** (approval notice, @mention) use the `resend` npm package and
   `RESEND_API_KEY` / `RESEND_FROM`. Missing key = silently skipped with a console warning.
 
+### Where the 3-second page loads came from (2026-09-19)
+
+Matthew reported the portal feeling slow on both mobile and desktop in prod. It was not the
+bundle and not the database: **Vercel functions were running in `iad1` (Washington DC) while the
+prod Supabase project is in `ap-southeast-1` (Singapore)** — the default region nobody had
+changed. Every server-side query went Manila → Virginia → Singapore → back, roughly 230ms each.
+
+The evidence that made it obvious: in DevTools the dashboard *document* took **3.16s**, while the
+browser's own direct calls to Supabase (the notification bell's fetches, Manila → Singapore) took
+**91ms and 219ms**. A server slower than the browser it is serving means the server is in the
+wrong place.
+
+Switching the Function Region to `sin1` and redeploying took the same page to **972ms** — a 2.2s
+saving on every page, with no code change. `vercel.json` now pins `"regions": ["sin1"]` so the
+setting is version-controlled; keep it matching the Supabase region if either ever moves.
+
+**Still on the table, if pages need to get faster again** (measured while diagnosing this, not yet
+acted on):
+- **Nothing in `src/app` uses `Promise.all`.** Queries run strictly in sequence: the project
+  detail page issues 11, the projects list 7, team and clients 6 each, plus 3 in the portal
+  layout. At `sin1` latency that is far cheaper than it was, but it is still ~14 serial round
+  trips to open a project.
+- **The profile row is read twice** on a project page — once by `(portal)/layout.tsx`, once by the
+  page. React's `cache()` would dedupe it.
+- **Over-fetching:** the project page loads project templates for every viewer though only admins
+  can apply them.
+- **Unused dependencies:** `recharts`, `@tanstack/react-query` and `@tanstack/react-query-devtools`
+  are in `dependencies` and imported nowhere. No runtime cost (nothing imports them, so they are
+  not bundled), but they slow installs and mislead anyone reading the manifest.
+- The notification bell polls every 30s — a battery and data cost on mobile, not a load-time one.
+
 ### GitHub org rename broke the Vercel deploy hook (2026-09-08)
 
 The GitHub owner was renamed **`web-likha` → `WebLikha-Digital`**. GitHub silently redirects

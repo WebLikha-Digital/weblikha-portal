@@ -557,6 +557,10 @@ Remove-Item Env:DB_URL                             # when done
 
 ### Environments
 
+- **Vercel functions run in `sin1` (Singapore)** — pinned in `vercel.json`, and set to match in
+  the project's Function Region. It must stay in the same region as the prod Supabase project
+  (`ap-southeast-1`, Singapore). See "Where the 3-second page loads came from" in @MEMORY.md
+  before changing it: the default `iad1` put every query on a Virginia↔Singapore round trip.
 - **Dev Supabase project:** `tydreidoqzndxjftpyzd` (used locally via `.env.local`).
 - **Prod Supabase project:** `vhsuyouczctnkvnnjzgg`. Prod keys live only in Vercel env vars;
   service role scoped to Production. Migrations 001–024 applied to **both** dev and prod (020–023 applied 2026-09-18, 024 on 2026-09-19).
